@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indicadores SPI · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <script src="/js/sms-graficas.js"></script>
+    <script src="/js/sms-analisis.js"></script>
+    <style>
+        .config-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 1100px) { .config-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; } }
+        .barra-guardar { position: sticky; bottom: 0; z-index: 20; margin-top: 24px; padding: 14px 0; background: linear-gradient(to top, var(--n50) 70%, transparent); }
+        .barra-guardar .sg-wrap { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .barra-guardar .estado-cambios { margin-right: auto; font-size: 13px; color: var(--n600); }
+        .sugerencias { display: flex; flex-wrap: wrap; gap: 8px; }
+        .vista b { color: var(--n900); font-variant-numeric: tabular-nums; }
+        .def { font-size: 12.5px; color: var(--n600); }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/analisis', texto: 'Análisis', icono: 'chart-bar', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Configuración · SMS</span>
+                <h1>Indicadores de desempeño de seguridad (SPI)</h1>
+                <p>Define qué indicadores sigue la Gerencia de SMS, su meta y su nivel de alerta. Los valores se calculan cada mes con los registros del sistema; no se precargan metas.</p>
+            </header>
+
+            <div id="avisos" class="sg-stack"></div>
+
+            <div class="config-grid" id="contenido" style="margin-top:20px" hidden>
+                <section class="sg-card">
+                    <div class="sg-card__head">
+                        <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-gauge"/></svg>Indicadores <span class="cuenta" id="cuenta"></span></h2>
+                        <button type="button" class="btn btn-secondary btn-sm editar" id="btnAgregar"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Agregar indicador</button>
+                    </div>
+                    <div class="sg-card__body">
+                        <div id="lista"></div>
+                    </div>
+                </section>
+
+                <div class="sg-stack">
+                    <section class="sg-card editar-bloque">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Indicadores sugeridos</h2></div>
+                        <div class="sg-card__body">
+                            <p class="sg-help" style="margin-bottom:10px">Agregan el indicador sin meta; la meta y la alerta las define la Gerencia de SMS.</p>
+                            <div class="sugerencias" id="sugerencias"></div>
+                        </div>
+                    </section>
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-repeat"/></svg>Hallazgos recurrentes</h2></div>
+                        <div class="sg-card__body sg-stack">
+                            <div class="sg-field">
+                                <label for="umbral">Reportes para considerar recurrente</label>
+                                <input type="number" id="umbral" min="2" max="100" style="max-width:140px">
+                            </div>
+                            <div class="sg-field">
+                                <label for="ventana">Ventana de tiempo (días)</label>
+                                <input type="number" id="ventana" min="7" max="730" style="max-width:140px">
+                                <span class="sg-help">Una categoría o lugar es recurrente si acumula ese número de reportes dentro de la ventana.</span>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Validación</h2></div>
+                        <div class="sg-card__body sg-stack">
+                            <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px">
+                                <input type="checkbox" id="validado" style="margin-top:2px">
+                                <span><strong>Metas validadas institucionalmente</strong><br><span class="sg-help">Márcalo cuando la Gerencia de SMS apruebe los indicadores y sus metas. Al guardar se registran tu nombre y la fecha.</span></span>
+                            </label>
+                            <p class="sg-help" id="validadoInfo"></p>
+                            <div class="sg-field">
+                                <label for="nota">Nota / referencia de aprobación</label>
+                                <textarea id="nota" maxlength="500" style="min-height:80px"></textarea>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <div class="barra-guardar" id="barraGuardar" hidden>
+            <div class="sg-wrap">
+                <span class="estado-cambios" id="estadoCambios">Sin cambios</span>
+                <button type="button" class="btn btn-secondary" id="btnDescartar" disabled>Descartar cambios</button>
+                <button type="button" class="btn btn-primary" id="btnGuardar" disabled><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-save"/></svg>Guardar configuración</button>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var original = null, actual = null, metricas = {}, categorias = [], catalogo = {}, editable = false;
+        var SUGERENCIAS = [
+            { metrica: 'porcentaje_en_plazo', nombre: 'Cumplimiento de plazos de atención' },
+            { metrica: 'dias_resolucion', nombre: 'Tiempo promedio de resolución' },
+            { metrica: 'alto_riesgo', nombre: 'Reportes de alto riesgo por mes' },
+            { metrica: 'acciones_efectivas', nombre: 'Efectividad de las acciones correctivas' },
+            { metrica: 'acciones_en_plazo', nombre: 'Acciones correctivas concluidas en plazo' },
+            { metrica: 'recibidos', nombre: 'Reportes recibidos (cultura de reporte)' }
+        ];
+
+        function copia(o) { return JSON.parse(JSON.stringify(o)); }
+        function sucio() { return JSON.stringify(original) !== JSON.stringify(actual); }
+        function marcar() {
+            var s = sucio();
+            $('btnGuardar').disabled = !s || !editable;
+            $('btnDescartar').disabled = !s;
+            $('estadoCambios').textContent = s ? 'Hay cambios sin guardar' : 'Sin cambios';
+        }
+
+        function vistaPrevia(s) {
+            if (s.categoria) return 'La vista previa por categoría se calcula al guardar.';
+            var c = catalogo[s.metrica];
+            if (!c) return '';
+            var ult = c.serie.slice(-6);
+            var m = metricas[s.metrica];
+            var f = SMSAnalisis.formatoSPI({ formato: m.formato, unidad: m.unidad });
+            return 'Últimos meses con datos: ' + ult.map(function (x) { return SMS.mes(x.mes) + ' <b>' + esc(f(x.valor)) + '</b>'; }).join(' · ');
+        }
+
+        function pintarLista() {
+            $('cuenta').textContent = actual.indicadores.length ? '(' + actual.indicadores.length + ')' : '';
+            if (!actual.indicadores.length) {
+                $('lista').innerHTML = '<div class="sg-empty" style="padding:28px 12px">' + ic('gauge') + '<b>Sin indicadores configurados</b>' +
+                    (editable ? 'Agrega un indicador o usa uno de los sugeridos.' : 'La Gerencia de SMS aún no define indicadores.') + '</div>';
+                return;
+            }
+            var opcMet = function (sel) {
+                return Object.keys(metricas).map(function (k) { return '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + esc(metricas[k].nombre) + ' (' + esc(metricas[k].unidad) + ')</option>'; }).join('');
+            };
+            $('lista').innerHTML = actual.indicadores.map(function (s, i) {
+                var m = metricas[s.metrica] || {};
+                var pct = m.formato === 'porcentaje';
+                return '<div class="config-fila' + (s.activo ? '' : ' is-inactiva') + '" data-i="' + i + '">' +
+                    '<div class="config-fila__top"><b>Indicador ' + (i + 1) + '</b>' +
+                    '<div style="display:flex;gap:12px;align-items:center"><label style="display:inline-flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" data-k="activo"' + (s.activo ? ' checked' : '') + '> Activo</label>' +
+                    (editable ? '<button type="button" class="btn btn-ghost btn-sm" data-quitar="' + i + '">' + ic('trash') + 'Quitar</button>' : '') + '</div></div>' +
+                    '<div class="grid">' +
+                    '<div class="sg-field ancho"><label for="n' + i + '">Nombre del indicador</label><input id="n' + i + '" data-k="nombre" maxlength="120" value="' + esc(s.nombre) + '"></div>' +
+                    '<div class="sg-field ancho"><label for="m' + i + '">Métrica</label><select id="m' + i + '" data-k="metrica">' + opcMet(s.metrica) + '</select><span class="def">' + esc(m.descripcion || '') + '</span></div>' +
+                    '<div class="sg-field ancho"><label for="c' + i + '">Categoría (opcional)</label><select id="c' + i + '" data-k="categoria"><option value="">Todas las categorías</option>' +
+                    categorias.map(function (c) { return '<option' + (c === s.categoria ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+                    '<div class="sg-field"><label for="d' + i + '">Interpretación</label><select id="d' + i + '" data-k="direccion"><option value="menor"' + (s.direccion === 'menor' ? ' selected' : '') + '>Menor es mejor</option><option value="mayor"' + (s.direccion === 'mayor' ? ' selected' : '') + '>Mayor es mejor</option></select></div>' +
+                    '<div class="sg-field"><label for="t' + i + '">Meta' + (pct ? ' (%)' : ' (' + esc(m.unidad || '') + ')') + '</label><input type="number" step="any" min="0"' + (pct ? ' max="100"' : '') + ' id="t' + i + '" data-k="meta" value="' + (s.meta == null ? '' : s.meta) + '" placeholder="Sin meta"></div>' +
+                    '<div class="sg-field"><label for="a' + i + '">Nivel de alerta</label><input type="number" step="any" min="0"' + (pct ? ' max="100"' : '') + ' id="a' + i + '" data-k="alerta" value="' + (s.alerta == null ? '' : s.alerta) + '" placeholder="Opcional"></div>' +
+                    '<div class="sg-field ancho"><label for="x' + i + '">Notas (opcional)</label><input id="x' + i + '" data-k="descripcion" maxlength="300" value="' + esc(s.descripcion || '') + '"></div>' +
+                    '</div><div class="vista">' + vistaPrevia(s) + '</div></div>';
+            }).join('');
+            if (!editable) $('lista').querySelectorAll('input, select').forEach(function (e) { e.disabled = true; });
+        }
+
+        function pintarTodo() {
+            var html = '';
+            if (!editable) html += '<div class="sg-banner info">' + ic('lock') + '<span>Vista de consulta. Solo un administrador puede modificar los indicadores. <a href="/login?volver=/admin/spi">Iniciar sesión</a></span></div>';
+            $('avisos').innerHTML = html;
+            $('contenido').hidden = false;
+            $('barraGuardar').hidden = !editable;
+            document.querySelectorAll('.editar, .editar-bloque').forEach(function (e) { e.hidden = !editable; });
+            $('umbral').value = actual.umbral_recurrencia;
+            $('ventana').value = actual.ventana_recurrencia_dias;
+            $('validado').checked = actual.validado;
+            $('nota').value = actual.nota || '';
+            $('validadoInfo').textContent = original.validado && original.validado_por ? 'Validado por ' + original.validado_por + (original.fecha_validacion ? ' el ' + SMS.fechaHora(original.fecha_validacion) : '') + '.' : '';
+            ['umbral', 'ventana', 'nota'].forEach(function (id) { $(id).readOnly = !editable; });
+            $('validado').disabled = !editable;
+            $('sugerencias').innerHTML = SUGERENCIAS.map(function (s, i) {
+                return '<button type="button" class="preset" data-sug="' + i + '">' + ic('plus', 'ic-16') + ' ' + esc(s.nombre) + '</button>';
+            }).join('');
+            pintarLista();
+            marcar();
+        }
+
+        document.addEventListener('input', function (e) {
+            if (!editable || !actual) return;
+            var t = e.target, fila = t.closest('.config-fila');
+            if (fila && t.dataset.k) {
+                var s = actual.indicadores[+fila.dataset.i];
+                var k = t.dataset.k;
+                if (k === 'activo') s.activo = t.checked;
+                else if (k === 'meta' || k === 'alerta') s[k] = t.value === '' ? null : Number(t.value);
+                else if (k === 'categoria') s.categoria = t.value || null;
+                else s[k] = t.value;
+                if (k === 'metrica') { s.direccion = metricas[s.metrica].direccion; pintarLista(); }
+                if (k === 'categoria' || k === 'activo') fila.querySelector('.vista').innerHTML = vistaPrevia(s);
+                if (k === 'activo') fila.classList.toggle('is-inactiva', !s.activo);
+            } else if (t.id === 'umbral') actual.umbral_recurrencia = Number(t.value);
+            else if (t.id === 'ventana') actual.ventana_recurrencia_dias = Number(t.value);
+            else if (t.id === 'nota') actual.nota = t.value;
+            else if (t.id === 'validado') actual.validado = t.checked;
+            marcar();
+        });
+        document.addEventListener('change', function (e) {
+            if (e.target.matches('select, input[type=checkbox]')) e.target.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        document.addEventListener('click', function (e) {
+            var q = e.target.closest('[data-quitar]');
+            if (q && editable) { actual.indicadores.splice(+q.dataset.quitar, 1); pintarLista(); marcar(); return; }
+            var g = e.target.closest('[data-sug]');
+            if (g && editable) {
+                var s = SUGERENCIAS[+g.dataset.sug];
+                actual.indicadores.push({ nombre: s.nombre, metrica: s.metrica, categoria: null, direccion: metricas[s.metrica].direccion, meta: null, alerta: null, activo: true, descripcion: '' });
+                pintarLista(); marcar();
+                SAGA.toast('Indicador agregado; define su meta y guarda', 'info', { duracion: 2500 });
+            }
+        });
+        $('btnAgregar').addEventListener('click', function () {
+            actual.indicadores.push({ nombre: '', metrica: 'recibidos', categoria: null, direccion: metricas.recibidos.direccion, meta: null, alerta: null, activo: true, descripcion: '' });
+            pintarLista(); marcar();
+            var ult = $('lista').lastElementChild; if (ult) { ult.scrollIntoView({ block: 'nearest' }); ult.querySelector('input[data-k=nombre]').focus(); }
+        });
+        $('btnDescartar').addEventListener('click', function () { actual = copia(original); pintarTodo(); });
+        $('btnGuardar').addEventListener('click', async function () {
+            var msg = actual.validado && !original.validado
+                ? '¿Guardar y marcar las metas como VALIDADAS? Confirma que la Gerencia de SMS las aprobó.'
+                : '¿Guardar la configuración de indicadores?';
+            if (!confirm(msg)) return;
+            this.disabled = true;
+            try {
+                var d = await SMS.api('/api/sms/spi/config', { method: 'PUT', json: { config: actual } });
+                original = copia(d.config); actual = copia(d.config);
+                pintarTodo();
+                SAGA.toast('Indicadores guardados', 'success');
+            } catch (e) { SAGA.toast(e.message, 'error'); marcar(); }
+        });
+        window.addEventListener('beforeunload', function (e) { if (editable && actual && sucio()) { e.preventDefault(); e.returnValue = ''; } });
+
+        Promise.all([SMS.api('/api/sms/spi/config'), SMS.api('/api/sms/spi?catalogo=1'), SMS.api('/api/sms/catalogos'), SMS.sesion()]).then(function (r) {
+            metricas = r[0].metricas;
+            original = copia(r[0].config); actual = copia(r[0].config);
+            (r[1].catalogo || []).forEach(function (c) { catalogo[c.metrica] = c; });
+            categorias = r[2].categorias;
+            editable = !!(r[3] && r[3].capacidades.indexOf('configurar_spi') >= 0);
+            pintarTodo();
+        }).catch(function (e) {
+            $('avisos').innerHTML = '<div class="sg-banner crit">' + ic('crit') + '<span>No se pudo cargar la configuración: ' + esc(e.message) + '</span></div>';
+        });
+    })();
+    </script>
+</body>
+</html>

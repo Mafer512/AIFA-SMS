@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi cuenta · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .cuenta-g { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 900px) { .cuenta-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+        .reqs { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--n500); }
+        .reqs li::before { content: "○ "; }
+        .reqs li.ok { color: var(--v700); }
+        .reqs li.ok::before { content: "✓ "; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap sg-wrap--mid">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Acceso</span>
+                <h1>Mi cuenta</h1>
+                <p>Tus datos de acceso y el cambio de contraseña.</p>
+            </header>
+            <div id="aviso" class="sg-stack"></div>
+
+            <div class="cuenta-g" id="zona" hidden>
+                <section class="sg-card">
+                    <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user"/></svg>Datos de la cuenta</h2></div>
+                    <div class="sg-card__body"><dl class="ficha" id="datos"></dl></div>
+                </section>
+                <section class="sg-card">
+                    <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-key"/></svg>Cambiar contraseña</h2></div>
+                    <div class="sg-card__body">
+                        <form id="formPass" class="sg-stack" novalidate>
+                            <div class="sg-field"><label for="pActual">Contraseña actual</label><input type="password" id="pActual" autocomplete="current-password" maxlength="128"></div>
+                            <div class="sg-field"><label for="pNueva">Nueva contraseña</label><input type="password" id="pNueva" autocomplete="new-password" maxlength="128">
+                                <ul class="reqs" id="reqs"><li data-r="largo">Al menos 10 caracteres</li><li data-r="mezcla">Letras y números</li><li data-r="distinta">Distinta de la actual</li></ul></div>
+                            <div class="sg-field"><label for="pConf">Confirmar nueva contraseña</label><input type="password" id="pConf" autocomplete="new-password" maxlength="128"></div>
+                            <div class="sg-banner crit" id="pError" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-crit"/></svg><span></span></div>
+                            <div><button type="submit" class="btn btn-primary"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-save"/></svg>Guardar contraseña</button></div>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+
+        function revisar() {
+            var n = $('pNueva').value;
+            var ok = { largo: n.length >= 10, mezcla: /[A-Za-z]/.test(n) && /\d/.test(n), distinta: n !== '' && n !== $('pActual').value };
+            document.querySelectorAll('#reqs li').forEach(function (li) { li.classList.toggle('ok', ok[li.dataset.r]); });
+        }
+        $('pNueva').addEventListener('input', revisar);
+        $('pActual').addEventListener('input', revisar);
+
+        async function cargar() {
+            var d = await SMS.api('/api/mi-cuenta');
+            var u = d.usuario;
+            $('datos').innerHTML =
+                '<div><dt>Nombre</dt><dd>' + esc([u.nombre, u.apellidos].filter(Boolean).join(' ')) + '</dd></div>' +
+                '<div><dt>Usuario</dt><dd class="mono">' + esc(u.username) + '</dd></div>' +
+                '<div><dt>Correo</dt><dd>' + esc(u.email) + '</dd></div>' +
+                '<div><dt>Rol</dt><dd>' + esc(d.rol_nombre || u.rol) + '</dd></div>' +
+                '<div><dt>Área</dt><dd>' + esc(u.departamento || '—') + '</dd></div>' +
+                '<div><dt>Último acceso</dt><dd>' + (u.ultimo_login ? SMS.fechaHora(u.ultimo_login) : '—') + '</dd></div>';
+            var avisos = '';
+            if (u.debe_cambiar_password || /cambiar=1/.test(location.search)) {
+                avisos += '<div class="sg-banner warn">' + ic('warn') + '<span><strong>Tu contraseña es temporal.</strong> Cámbiala ahora por una que solo tú conozcas.</span></div>';
+            }
+            $('aviso').innerHTML = avisos;
+            if (u.rol === 'admin') {
+                $('aviso').insertAdjacentHTML('beforeend', '<div class="sg-banner info">' + ic('users') + '<span>Como administrador puedes dar de alta a otras personas en <a href="/admin/usuarios">Usuarios y permisos</a>.</span></div>');
+            }
+        }
+
+        $('formPass').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            var err = $('pError'); err.hidden = true;
+            try {
+                if ($('pNueva').value !== $('pConf').value) throw new Error('La confirmación no coincide con la nueva contraseña');
+                await SMS.api('/api/mi-cuenta/password', { method: 'PUT', json: { actual: $('pActual').value, nueva: $('pNueva').value, confirmacion: $('pConf').value } });
+                this.reset(); revisar();
+                SAGA.toast('Contraseña actualizada', 'success');
+                history.replaceState(null, '', '/mi-cuenta');
+                cargar();
+            } catch (er) { err.querySelector('span').textContent = er.message; err.hidden = false; }
+        });
+
+        SMS.sesion().then(function (s) {
+            if (!s) {
+                $('aviso').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span><a href="/login?volver=/mi-cuenta">Inicia sesión</a> para ver tu cuenta.</span></div>';
+                return;
+            }
+            $('zona').hidden = false;
+            cargar();
+        });
+    })();
+    </script>
+</body>
+</html>

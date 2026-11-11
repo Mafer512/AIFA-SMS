@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centro de notificaciones · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .barra-notif { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .barra-notif .izq { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .barra-notif select { width: auto; height: 32px; font-size: 13px; }
+        .mas-notif { padding: 14px; text-align: center; border-top: 1px solid var(--n100); }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Seguridad operacional · SMS</span>
+                <h1>Centro de notificaciones</h1>
+                <p id="subtitulo">Actividad de los reportes de tu área y alertas que requieren atención.</p>
+            </header>
+
+            <div id="avisos"></div>
+
+            <div class="notif-centro" id="contenido" hidden>
+                <section class="sg-card" aria-labelledby="tAct">
+                    <div class="sg-card__head">
+                        <div class="barra-notif" style="width:100%">
+                            <div class="izq">
+                                <h2 class="sg-card__title" id="tAct"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-bell"/></svg>Actividad <span class="cuenta" id="cuenta"></span></h2>
+                                <div class="segm" role="group" aria-label="Mostrar">
+                                    <button type="button" data-ver="todas" aria-pressed="true">Todas</button>
+                                    <button type="button" data-ver="no_leidas" aria-pressed="false">No leídas</button>
+                                </div>
+                                <label class="sr-only" for="tipo">Tipo</label>
+                                <select id="tipo"><option value="">Todos los tipos</option></select>
+                            </div>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btnLeerTodo"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-check"/></svg>Marcar todo como leído</button>
+                        </div>
+                    </div>
+                    <div class="barra-carga" id="barraCarga" hidden></div>
+                    <ul class="notif-lista" id="lista" aria-live="polite"></ul>
+                    <div class="mas-notif" id="mas" hidden><button type="button" class="btn btn-secondary btn-sm" id="btnMas">Cargar más</button></div>
+                </section>
+
+                <aside class="sg-card" aria-labelledby="tAlertas">
+                    <div class="sg-card__head"><h2 class="sg-card__title" id="tAlertas"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-warn"/></svg>Requiere atención</h2></div>
+                    <div class="sg-card__body" id="alertas"><span class="skel"></span><span class="skel skel--media"></span></div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var ICONO = { nuevo_reporte: 'file-plus', asignacion: 'users', actualizacion: 'refresh', accion_asignada: 'checklist', validacion_pendiente: 'user-check', accion_reabierta: 'warn', riesgo_evaluado: 'shield', compromiso: 'calendar' };
+        var estado = { ver: 'todas', tipo: '', offset: 0, limite: 25 };
+        var eventos = [];
+
+        function urlEventos() {
+            var q = new URLSearchParams({ limite: estado.limite, offset: estado.offset, dias: 365 });
+            if (estado.ver === 'no_leidas') q.set('no_leidas', '1');
+            if (estado.tipo) q.set('tipo', estado.tipo);
+            return '/api/sms/notificaciones?' + q.toString();
+        }
+
+        function item(n) {
+            var href = n.folio ? '/reportes/' + encodeURIComponent(n.folio) : null;
+            return '<li class="notif-item' + (n.leida ? '' : ' is-nueva') + '" data-id="' + n.id + '">' + ic(ICONO[n.tipo] || 'bell') +
+                '<div>' + (href ? '<a class="t" href="' + href + '" data-leer="' + n.id + '">' + esc(n.titulo) + '</a>' : '<span class="t" style="font-weight:600">' + esc(n.titulo) + '</span>') +
+                (n.leida ? '' : '<span class="punto-nuevo" aria-label="No leída"></span>') +
+                (n.mensaje ? '<p>' + esc(n.mensaje) + '</p>' : '') +
+                '<div class="meta"><span>' + esc(n.tipo_nombre) + '</span><span>' + SMS.fechaHora(n.creado_en) + '</span><span>' + SMS.relativa(n.creado_en) + '</span></div></div>' +
+                (n.leida ? '<span class="sg-help" style="white-space:nowrap">Leída</span>' : '<button type="button" class="btn btn-ghost btn-sm" data-marcar="' + n.id + '" data-tip="Marcar como leída" aria-label="Marcar como leída">' + ic('check') + '</button>') +
+                '</li>';
+        }
+
+        function pintarLista(total) {
+            $('cuenta').textContent = total ? '(' + total + ')' : '';
+            $('lista').innerHTML = eventos.length ? eventos.map(item).join('')
+                : '<li><div class="sg-empty" style="padding:32px 16px">' + ic('inbox') + '<b>' + (estado.ver === 'no_leidas' ? 'No tienes notificaciones sin leer' : 'Sin notificaciones') + '</b>' +
+                  (estado.tipo ? 'Prueba con otro tipo.' : 'Aquí aparecerá la actividad de los reportes de tu área del último año.') + '</div></li>';
+            $('mas').hidden = eventos.length >= total;
+        }
+
+        function bloque(titulo, icono, clase, lista, fmt, vacio, total) {
+            return '<div class="alerta-bloque ' + clase + '"><h3>' + ic(icono) + esc(titulo) + '<span class="cuenta">' + (total != null ? total : lista.length) + '</span></h3>' +
+                (lista.length ? '<ul>' + lista.map(fmt).join('') + '</ul>' : '<p class="vacio">' + esc(vacio) + '</p>') + '</div>';
+        }
+        function pintarAlertas(a) {
+            var enlace = function (href, t, s) { return '<li><a href="' + href + '"><span>' + t + '</span><small>' + s + '</small></a></li>'; };
+            var html = bloque('Vencidos', 'crit', 'crit', a.vencidos || [], function (r) { return enlace('/reportes/' + encodeURIComponent(r.folio), esc(r.folio), 'venció ' + SMS.fecha(r.fecha_vencimiento)); }, 'Ningún reporte vencido.') +
+                bloque('Próximos a vencer (' + a.dias_aviso + ' días)', 'hourglass', 'warn', a.proximos || [], function (r) { return enlace('/reportes/' + encodeURIComponent(r.folio), esc(r.folio), 'vence ' + SMS.fecha(r.fecha_vencimiento)); }, 'Nada vence en los próximos días.');
+            if (a.por_validar && (a.por_validar.length || window.__puedeVerificar)) {
+                html += bloque('Acciones por verificar', 'user-check', '', a.por_validar, function (r) { return enlace('/reportes/' + encodeURIComponent(r.folio) + '#acciones', esc(r.folio), esc(String(r.descripcion || '').slice(0, 40))); }, 'Sin acciones pendientes de verificar.');
+            }
+            if (a.por_evaluar_total != null && (a.por_evaluar.length || a.por_evaluar_total)) {
+                html += bloque('Pendientes de evaluar riesgo', 'shield', 'warn', a.por_evaluar, function (r) { return enlace('/reportes/' + encodeURIComponent(r.folio) + '#riesgo', esc(r.folio), SMS.fecha(r.fecha)); }, 'Todos los reportes abiertos están evaluados.', a.por_evaluar_total) +
+                    (a.por_evaluar_total > a.por_evaluar.length ? '<p class="sg-help" style="margin-top:6px"><a href="/reportes/general?riesgo=pendiente_evaluar">Ver los ' + a.por_evaluar_total + ' en la vista general</a></p>' : '') +
+                    (!a.matriz_validada ? '<p class="sg-help" style="margin-top:6px">' + ic('warn', 'ic-16') + ' La matriz de riesgo aún no está validada; las evaluaciones se habilitan al validarla.</p>' : '');
+            }
+            $('alertas').innerHTML = html;
+        }
+
+        async function cargar(anexar) {
+            $('barraCarga').hidden = false;
+            try {
+                var d = await SMS.api(urlEventos());
+                eventos = anexar ? eventos.concat(d.eventos) : d.eventos;
+                pintarLista(d.total);
+                pintarAlertas(d.alertas);
+                if (!$('tipo').dataset.listo) {
+                    $('tipo').innerHTML = '<option value="">Todos los tipos</option>' + Object.keys(d.tipos).map(function (k) { return '<option value="' + k + '">' + esc(d.tipos[k]) + '</option>'; }).join('');
+                    $('tipo').dataset.listo = '1';
+                }
+            } catch (e) {
+                $('lista').innerHTML = '<li><div class="sg-empty crit">' + ic('crit') + '<b>No se pudieron cargar las notificaciones</b>' + esc(e.message) + '</div></li>';
+            } finally { $('barraCarga').hidden = true; }
+        }
+
+        async function marcar(ids) {
+            await SMS.api('/api/sms/notificaciones/leidas', { method: 'POST', json: ids ? { ids: ids } : {} });
+        }
+
+        document.addEventListener('click', async function (e) {
+            var v = e.target.closest('[data-ver]');
+            if (v) {
+                estado.ver = v.dataset.ver; estado.offset = 0;
+                document.querySelectorAll('[data-ver]').forEach(function (x) { x.setAttribute('aria-pressed', x === v ? 'true' : 'false'); });
+                cargar(); return;
+            }
+            var m = e.target.closest('[data-marcar]');
+            if (m) {
+                try { await marcar([+m.dataset.marcar]); estado.offset = 0; await cargar(); } catch (er) { SAGA.toast(er.message, 'error'); }
+                return;
+            }
+            var l = e.target.closest('[data-leer]');
+            if (l) marcar([+l.dataset.leer]).catch(function () {});
+        });
+        $('tipo').addEventListener('change', function () { estado.tipo = this.value; estado.offset = 0; cargar(); });
+        $('btnMas').addEventListener('click', function () { estado.offset = eventos.length; cargar(true); });
+        $('btnLeerTodo').addEventListener('click', async function () {
+            if (!confirm('¿Marcar todas las notificaciones como leídas?')) return;
+            try { await marcar(null); estado.offset = 0; await cargar(); SAGA.toast('Notificaciones marcadas como leídas', 'success'); }
+            catch (er) { SAGA.toast(er.message, 'error'); }
+        });
+
+        SMS.sesion().then(function (u) {
+            if (!u) {
+                $('avisos').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span>Las notificaciones son personales. <a href="/login?volver=/notificaciones">Inicia sesión</a> para verlas.</span></div>';
+                return;
+            }
+            window.__puedeVerificar = u.capacidades.indexOf('verificar_accion') >= 0;
+            $('subtitulo').textContent = u.capacidades.indexOf('alcance_global') >= 0
+                ? 'Actividad para supervisión y alertas de todos los reportes.'
+                : 'Actividad de los reportes de ' + (u.departamento || 'tu área') + ' y alertas que requieren atención.';
+            $('contenido').hidden = false;
+            cargar();
+        });
+    })();
+    </script>
+</body>
+</html>

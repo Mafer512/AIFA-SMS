@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de usuario · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .manual { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+        @media (min-width: 1000px) { .manual { grid-template-columns: 260px minmax(0, 1fr); } }
+        .indice { position: sticky; top: calc(var(--appbar-h, 64px) + 16px); max-height: calc(100vh - var(--appbar-h, 64px) - 32px); overflow-y: auto; }
+        @media (max-width: 999px) { .indice { position: static; max-height: none; } }
+        .indice .buscar { margin-bottom: 12px; }
+        .indice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; counter-reset: sec; }
+        .indice li { counter-increment: sec; }
+        .indice a { display: flex; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13.5px; color: var(--n700); text-decoration: none; line-height: 1.35; }
+        .indice a::before { content: counter(sec) "."; min-width: 18px; color: var(--n400); font-variant-numeric: tabular-nums; }
+        .indice a:hover { background: var(--n50); color: var(--n900); }
+        .indice a.is-activo { background: var(--v50); color: var(--v800); font-weight: 600; }
+        .indice a:focus-visible { outline: none; box-shadow: var(--focus); }
+        .indice li[hidden] { display: none; }
+        @media (max-width: 999px) { .indice ol { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
+
+        .contenido { max-width: 820px; min-width: 0; }
+        .sec { scroll-margin-top: calc(var(--appbar-h, 64px) + 16px); padding: 26px 28px; background: var(--sf); border: 1px solid var(--n100); border-radius: 12px; box-shadow: var(--sh-sm); }
+        .sec + .sec { margin-top: 18px; }
+        .sec[hidden] { display: none; }
+        @media (max-width: 600px) { .sec { padding: 20px 16px; } }
+        .sec h2 { display: flex; align-items: center; gap: 10px; font-size: 21px; margin-bottom: 6px; }
+        .sec h2 .ic { width: 22px; height: 22px; color: var(--v700); flex: none; }
+        .sec h3 { font-size: 15.5px; margin: 22px 0 8px; color: var(--n900); scroll-margin-top: calc(var(--appbar-h, 64px) + 16px); }
+        .sec p, .sec li { font-size: 14.5px; line-height: 1.65; color: var(--n800); }
+        .sec p + p { margin-top: 8px; }
+        .sec .lead { color: var(--n600); margin-bottom: 4px; }
+        .sec ul, .sec ol.pasos { margin: 8px 0 0; padding-left: 22px; }
+        .sec li + li { margin-top: 4px; }
+        .sec ol.pasos li::marker { font-weight: 700; color: var(--v700); }
+        .sec .quien { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 3px 9px; border-radius: 4px; background: var(--n50); border: 1px solid var(--n100); font-size: 12.5px; color: var(--n700); }
+        .sec .quien .ic { width: 14px; height: 14px; }
+        .sec table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13.5px; }
+        .sec th, .sec td { padding: 9px 10px; border-bottom: 1px solid var(--n100); text-align: left; vertical-align: top; }
+        .sec thead th { font: 700 10.5px var(--ft); letter-spacing: .1em; text-transform: uppercase; color: var(--n600); background: var(--n50); }
+        .sec td.c { text-align: center; }
+        .tabla-x { overflow-x: auto; }
+        .sec kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--n200); border-bottom-width: 2px; border-radius: 4px; font: 600 12px var(--fm); background: var(--n50); color: var(--n800); }
+        .sec .btn-ej { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border: 1px solid var(--n200); border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--n800); background: var(--sf); white-space: nowrap; vertical-align: baseline; }
+        .sec .btn-ej .ic { width: 14px; height: 14px; }
+        .sec .sg-banner { margin-top: 12px; }
+        .flujo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 12px 0 4px; font-size: 13px; }
+        .flujo .paso { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--n200); background: var(--n50); font-weight: 600; color: var(--n800); }
+        .flujo .ic { width: 16px; height: 16px; color: var(--n400); }
+        .ejemplos { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 10px; }
+        .faq details { border: 1px solid var(--n100); border-radius: 8px; padding: 0 14px; }
+        .faq details + details { margin-top: 8px; }
+        .faq summary { cursor: pointer; padding: 12px 0; font-weight: 600; font-size: 14.5px; color: var(--n900); }
+        .faq details[open] summary { border-bottom: 1px solid var(--n100); margin-bottom: 10px; }
+        .faq details > :last-child { margin-bottom: 12px; }
+        mark { background: color-mix(in srgb, var(--amb) 35%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+        .sin-resultados { padding: 28px; text-align: center; color: var(--n500); }
+        .portada { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        @media print {
+            .indice, .portada .btn { display: none !important; }
+            .manual { display: block; }
+            .contenido { max-width: none; }
+            .sec { box-shadow: none; border: 0; padding: 0; break-inside: auto; }
+            .sec + .sec { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--n200); }
+            .sec h2, .sec h3 { break-after: avoid; }
+            .faq details { border: 0; padding: 0; }
+            .faq details > * { display: block; }
+        }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ],
+    manual: true
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead portada">
+                <div>
+                    <span class="sg-kicker">Ayuda · S.A.G.A.</span>
+                    <h1>Manual de usuario</h1>
+                    <p>Reportes y seguimiento de hallazgos de Seguridad Operacional (SMS) del AIFA.</p>
+                </div>
+                <button type="button" class="btn btn-secondary" id="btnImprimir"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg>Imprimir o guardar PDF</button>
+            </header>
+
+            <div class="manual">
+                <nav class="indice" aria-label="Contenido del manual">
+                    <div class="sg-field buscar">
+                        <label for="buscar" class="sr-only">Buscar en el manual</label>
+                        <div class="campo-ic"><input type="search" id="buscar" placeholder="Buscar en el manual" autocomplete="off"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg></div>
+                    </div>
+                    <ol id="indice"></ol>
+                </nav>
+
+                <div class="contenido" id="contenido">
+
+<!-- 1 ------------------------------------------------------------------ -->
+<section class="sec" id="inicio" data-titulo="Qué es y cómo está organizado">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-info"/></svg>Qué es y cómo está organizado</h2>
+    <p class="lead">S.A.G.A. registra los hallazgos de seguridad operacional que cualquier persona reporta en el aeropuerto y da seguimiento a su atención hasta el cierre.</p>
+    <p>El recorrido de un hallazgo es:</p>
+    <div class="flujo">
+        <span class="paso">1. Alguien lo reporta</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">2. Se notifica a las áreas</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">3. El área lo atiende</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">4. Supervisión evalúa y verifica</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">5. Se cierra</span>
+    </div>
+    <h3>Pantallas principales</h3>
+    <div class="tabla-x"><table>
+        <thead><tr><th>Pantalla</th><th>Para qué sirve</th><th>Quién</th></tr></thead>
+        <tbody>
+            <tr><td><b>Nuevo reporte</b></td><td>Reportar un hallazgo.</td><td>Cualquier persona, sin sesión</td></tr>
+            <tr><td><b>Vista general</b></td><td>Indicadores, búsqueda y tabla de todos los reportes.</td><td>Todos</td></tr>
+            <tr><td><b>Detalle del reporte</b></td><td>Etapas, plazo, riesgo, acciones correctivas e historial.</td><td>Todos; la gestión según el rol</td></tr>
+            <tr><td><b>Panel del área</b></td><td>Registrar seguimientos de los reportes del área.</td><td>Personal del área</td></tr>
+            <tr><td><b>Análisis estadístico</b></td><td>Gráficas, comparativos, desempeño por área, recurrencias e indicadores SPI.</td><td>Todos</td></tr>
+            <tr><td><b>Notificaciones</b></td><td>Avisos y alertas que requieren atención.</td><td>Con sesión</td></tr>
+            <tr><td><b>Administración</b></td><td>Usuarios, matriz de riesgo, SPI, zonas, reportes eliminados, respaldos y bitácora.</td><td>Administración y supervisión</td></tr>
+        </tbody>
+    </table></div>
+    <p style="margin-top:12px">El botón <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-moon"/></svg></span> de la barra superior cambia entre modo claro y oscuro. El botón <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-book"/></svg>Manual</span> abre esta guía desde cualquier pantalla.</p>
+</section>
+
+<!-- 2 ------------------------------------------------------------------ -->
+<section class="sec" id="reportar" data-titulo="Reportar un hallazgo">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-file-plus"/></svg>Reportar un hallazgo</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-users"/></svg>Cualquier persona · no requiere sesión</span>
+    <ol class="pasos">
+        <li>En la barra superior toca <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-file-plus"/></svg>Nuevo reporte</span>.</li>
+        <li><b>Información del reportante</b> (opcional): nombre, teléfono, gerencia o área y cargo. La gerencia se elige de la lista de áreas del sistema; si la tuya no aparece (por ejemplo, una empresa externa), elige <b>Otra</b> y escríbela. Estos datos ayudan a que el área te contacte si necesita más información.</li>
+        <li><b>Categoría del hallazgo</b> (obligatoria). Si no está en la lista, elige “Otro” y especifícala.</li>
+        <li><b>Descripción detallada</b> (obligatoria, hasta 1000 caracteres): qué viste, el riesgo y cualquier dato útil.</li>
+        <li><b>Áreas notificadas</b> (obligatorio): marca las áreas que deben enterarse.</li>
+        <li><b>Ubicación</b> (obligatoria, mínimo 5 caracteres), por ejemplo “Cerca de la posición 601, plataforma de carga”. Opcionalmente toca <b>Obtener ubicación GPS</b> para agregar las coordenadas.</li>
+        <li><b>Evidencia gráfica</b> (opcional): hasta 5 imágenes JPG, PNG, WebP o GIF de máximo 10 MB cada una.</li>
+        <li>Envía. El sistema muestra el <b>folio</b> del reporte (por ejemplo, <span class="mono">RSM-55</span>) y ofrece avisar también por WhatsApp a las áreas.</li>
+    </ol>
+    <div class="sg-banner info"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-info"/></svg><span>Escribe el lugar con referencias que usa el aeropuerto (número de posición, puerta, pista). Así el sistema puede detectar cuando un mismo lugar acumula reportes.</span></div>
+</section>
+
+<!-- 3 ------------------------------------------------------------------ -->
+<section class="sec" id="acceso" data-titulo="Iniciar sesión y tu cuenta">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-login"/></svg>Iniciar sesión y tu cuenta</h2>
+    <ol class="pasos">
+        <li>Toca <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-login"/></svg>Acceso</span>.</li>
+        <li>Escribe tu <b>usuario</b> (sin espacios, por ejemplo <span class="mono">fabrizio.pizano</span>) <b>o tu correo</b>, y tu contraseña.</li>
+        <li>Al entrar, el sistema te lleva al panel de tu área. Un administrador entra a <b>Administración</b>.</li>
+    </ol>
+    <p style="margin-top:10px">Con la sesión abierta, arriba a la derecha aparece <b>tu nombre</b> en lugar de “Acceso”. Su menú lleva a tu panel (o a Administración), Notificaciones, Mi cuenta y <b>Cerrar sesión</b>.</p>
+    <h3>Contraseña temporal y cambio de contraseña</h3>
+    <p>Si un administrador te dio una contraseña temporal, al entrar se abre <b>Mi cuenta</b> para que la cambies. También puedes cambiarla cuando quieras desde la campana de notificaciones → <b>Mi cuenta</b>, o en <span class="mono">/mi-cuenta</span>. La contraseña debe tener al menos 10 caracteres, combinar letras y números y no contener tu usuario ni tu nombre.</p>
+    <h3>Bloqueo y duración de la sesión</h3>
+    <ul>
+        <li>Después de 5 intentos fallidos la cuenta se bloquea 30 minutos. Un administrador puede desbloquearla antes.</li>
+        <li>La sesión dura 2 horas; después se pide entrar de nuevo.</li>
+    </ul>
+    <h3>Primera cuenta de administrador</h3>
+    <p>Si no existe una cuenta de administrador utilizable, en la pantalla de inicio de sesión aparece <b>Crear cuenta de administrador</b>. Solo se ve en la computadora donde corre el servidor y pide el <b>código de configuración</b> que el servidor muestra en su terminal al iniciar (<span class="mono">Código de configuración inicial: XXXXX-XXXXX</span>). Ese código cambia en cada inicio, al usarse y tras 5 intentos fallidos.</p>
+</section>
+
+<!-- 4 ------------------------------------------------------------------ -->
+<section class="sec" id="roles" data-titulo="Roles y permisos">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>Roles y permisos</h2>
+    <p class="lead">Cada cuenta tiene un rol y un área. Lo que puedes hacer depende del rol; los roles de área solo gestionan los reportes de su propia área.</p>
+    <div class="tabla-x"><table>
+        <thead><tr><th>Puede…</th><th class="c">Consulta</th><th class="c">Editor de área</th><th class="c">Supervisión SMS</th><th class="c">Administrador</th></tr></thead>
+        <tbody>
+            <tr><td>Ver acciones, autores e historial interno</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td></tr>
+            <tr><td>Registrar y avanzar acciones correctivas (de su área)</td><td class="c"></td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td></tr>
+            <tr><td>Asignar responsable y fecha compromiso (de su área)</td><td class="c"></td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td></tr>
+            <tr><td>Evaluar riesgo, verificar efectividad, cancelar acciones</td><td class="c"></td><td class="c"></td><td class="c">✓</td><td class="c">✓</td></tr>
+            <tr><td>Exportar con datos del reportante y ver la bitácora</td><td class="c"></td><td class="c"></td><td class="c">✓</td><td class="c">✓</td></tr>
+            <tr><td>Usuarios, matriz de riesgo, SPI, zonas y eliminar reportes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c">✓</td></tr>
+        </tbody>
+    </table></div>
+    <p style="margin-top:10px">Supervisión y Administración trabajan con todas las áreas. Cualquier persona, sin sesión, puede reportar y consultar la vista general y el análisis.</p>
+</section>
+
+<!-- 5 ------------------------------------------------------------------ -->
+<section class="sec" id="vista-general" data-titulo="Vista general de reportes">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg>Vista general de reportes</h2>
+    <h3>Indicadores</h3>
+    <p>Las tarjetas de arriba resumen los reportes que cumplen los filtros activos. <b>Toca una tarjeta para filtrar</b> la tabla con ese criterio; tócala otra vez para quitar el filtro.</p>
+    <ul>
+        <li><b>Estatus de los reportes</b>: Total, Nuevos (A), En atención (B y C), Resueltos (D), Cerrados sin acción (E y F) y porcentaje de reportes cerrados.</li>
+        <li>Debajo aparece el <b>cuadre</b>: el total siempre es la suma de esas cifras. Un reporte asignado a varias áreas cuenta una sola vez.</li>
+        <li><b>Gestión, plazos y riesgo</b>: cumplimiento de plazos, tiempo de resolución (mediana y promedio), alto riesgo, pendientes de evaluar, vencidos y próximos a vencer.</li>
+        <li><b>Cumplimiento de plazos</b>: de los reportes cerrados que tenían fecha compromiso o plazo por nivel de riesgo, porcentaje cerrado a más tardar en esa fecha.</li>
+    </ul>
+    <h3>Variación y tendencia</h3>
+    <p>Cada tarjeta muestra cuánto cambió su cifra frente al <b>periodo anterior de igual duración</b> (por ejemplo, del 1 al 30 de noviembre frente al 2 al 31 de octubre). Se usan los mismos filtros; solo cambia el periodo por fecha del reporte, y el estatus de ambos periodos es el vigente hoy. Si eliges ese periodo anterior en los filtros, verás exactamente la cifra con la que se comparó.</p>
+    <ul>
+        <li>Sin periodo elegido, la variación compara los <b>últimos 30 días</b> con los 30 previos (la tarjeta lo indica con «últ. 30 días»).</li>
+        <li>Los conteos y tiempos cambian en <b>porcentaje</b> (con la diferencia absoluta al lado); los porcentajes cambian en <b>puntos (pts)</b>.</li>
+        <li>Verde: mejora · rojo: empeora · gris: cifra sin juicio de valor (por ejemplo, el total de reportes). Si el periodo anterior fue 0 se muestra solo la diferencia, sin porcentaje.</li>
+        <li>Pasa el cursor sobre la variación para ver las fechas y las cifras de ambos periodos.</li>
+    </ul>
+    <h3>Buscar y filtrar</h3>
+    <ul>
+        <li>Filtros rápidos: <b>Folio</b>, <b>Palabras clave</b> (busca en descripción, ubicación, categoría y seguimientos), <b>Estatus</b> y <b>Nivel de riesgo</b>.</li>
+        <li><span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-filter"/></svg>Más filtros</span>: periodos rápidos (hoy, ayer, 7 o 30 días, mes actual, mes anterior, 90 días, este año), fecha o rango, área involucrada, área responsable, tipo de hallazgo, plazo (semáforo) y, si está activo, zona.</li>
+        <li>Los filtros aplicados aparecen como etiquetas; quita uno con su <b>×</b> o todos con <b>Restablecer filtros</b>.</li>
+        <li>La dirección de la página guarda los filtros: puedes copiarla y compartirla.</li>
+    </ul>
+    <h3>La tabla</h3>
+    <ul>
+        <li>Ordena tocando el encabezado de una columna o con <b>Ordenar por</b>.</li>
+        <li><span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-list"/></svg>Columnas</span> muestra u oculta columnas. En pantallas angostas algunas columnas se integran en otra para evitar la barra horizontal.</li>
+        <li><b>Ver más</b> despliega descripciones largas.</li>
+        <li>Cambia de página arriba o abajo de la tabla; elige 10, 25, 50 o 100 por página.</li>
+        <li>Botones de cada fila:
+            <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-eye"/></svg>Vista rápida</span>
+            <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>Historial</span>
+            <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>Detalle</span>
+            y, solo para administradores, <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trash"/></svg>Eliminar</span>.</li>
+        <li>En el celular la tabla se muestra como tarjetas.</li>
+    </ul>
+    <h3 id="semaforo">Semáforo de plazos</h3>
+    <div class="ejemplos" id="ejemplosSemaforo"></div>
+    <p style="margin-top:10px">El plazo de un reporte abierto es la fecha más próxima entre: su <b>fecha compromiso</b>, el <b>plazo de su nivel de riesgo</b> (si la matriz lo define) y la fecha compromiso de sus <b>acciones abiertas</b>. “Próximo a vencer” significa que vence dentro de los días de aviso (7 por defecto). En los cerrados indica si se cerraron <b>en plazo</b> o <b>fuera de plazo</b>.</p>
+    <h3>Exportar</h3>
+    <p><span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-download"/></svg>Exportar</span> genera, con los filtros activos, un <b>PDF</b> o un <b>Excel</b> personalizables (ver <a href="#informe">Informe ejecutivo y exportaciones</a>) o el <b>Informe ejecutivo</b> para imprimir. Los datos personales del reportante solo se incluyen para supervisión y administración.</p>
+</section>
+
+<!-- 6 ------------------------------------------------------------------ -->
+<section class="sec" id="detalle" data-titulo="Detalle de un reporte">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>Detalle de un reporte</h2>
+    <p class="lead">Ábrelo con el botón <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg></span> de la tabla o desde la vista rápida. Sin sesión ves la información pública; con sesión, además, la gestión según tu rol.</p>
+    <ul>
+        <li><b>Etapas de atención</b>: Generado → Enterado → En atención → cierre, con la fecha y el área de cada etapa y el tiempo transcurrido. Si el reporte avanzó sin registrar una etapa, aparece como “Sin registro”.</li>
+        <li><b>Estado de atención</b>: estatus, área responsable, nivel de riesgo, semáforo de plazo y última actualización.</li>
+        <li><b>Responsable y fecha compromiso</b>: quién atiende y para cuándo.</li>
+        <li><b>Evaluación de riesgo</b>: riesgo inicial, medidas de mitigación y riesgo residual.</li>
+        <li><b>Acciones correctivas y preventivas</b>.</li>
+        <li><b>Historial completo</b>: seguimientos y cada cambio, con quién lo hizo y cuándo.</li>
+        <li><span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg>Imprimir</span> genera una versión para papel o PDF.</li>
+    </ul>
+    <h3>Asignar responsable y fecha compromiso</h3>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Editor (su área) · Supervisión · Administrador</span>
+    <ol class="pasos">
+        <li>En la tarjeta <b>Responsable y fecha compromiso</b> toca <b>Asignar responsable y fecha</b>.</li>
+        <li>Elige el área (de las asociadas al reporte), escribe la persona responsable y la fecha compromiso (hoy o posterior).</li>
+        <li>Para cambiarla usa <b>Reprogramar o cambiar responsable</b>; el <b>motivo es obligatorio</b>. Los cambios anteriores quedan en el historial.</li>
+    </ol>
+</section>
+
+<!-- 7 ------------------------------------------------------------------ -->
+<section class="sec" id="panel-area" data-titulo="Seguimiento desde el panel del área">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-building"/></svg>Seguimiento desde el panel del área</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-users"/></svg>Personal del área responsable</span>
+    <p style="margin-top:10px">Al iniciar sesión entras al panel de tu área con los <b>hallazgos del área</b>, filtros por fecha y estatus.</p>
+    <ol class="pasos">
+        <li>Abre el reporte y elige <b>Gestión de seguimiento → Agregar seguimiento</b>.</li>
+        <li>Elige el estatus: <b>B · Enterado</b> (el área ya lo conoce), <b>C · En atención</b> (se está atendiendo) o <b>D · Resuelto</b> (quedó atendido). Para cerrar sin acción usa <b>E · Duplicado de otro reporte</b> (escribe el folio del reporte original; el seguimiento queda como “Duplicado de RSM-…”) o <b>F · No requiere atención</b> (el motivo es obligatorio).</li>
+        <li>Indica la fecha del evento, describe lo realizado y, si quieres, agrega evidencia gráfica.</li>
+        <li>Guarda. El seguimiento recibe un folio (por ejemplo, <span class="mono">RSM-54-C1</span>) y se avisa a los involucrados.</li>
+    </ol>
+    <p>Con <b>Agregar área</b> notificas a otra área que deba participar. Solo el área marcada como responsable puede registrar seguimientos.</p>
+    <div class="sg-banner warn"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-warn"/></svg><span><b>No se puede cerrar</b> (Resuelto, Duplicado o No requiere atención) un reporte que tenga acciones correctivas pendientes, en proceso o sin verificar. Primero se concluyen y se verifican. El sistema nunca cierra reportes por sí solo.</span></div>
+</section>
+
+<!-- 8 ------------------------------------------------------------------ -->
+<section class="sec" id="acciones" data-titulo="Acciones correctivas y preventivas">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-checklist"/></svg>Acciones correctivas y preventivas</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Registrar y avanzar: Editor (su área), Supervisión, Administrador · Verificar y cancelar: Supervisión, Administrador</span>
+    <h3>Registrar una acción</h3>
+    <ol class="pasos">
+        <li>En el detalle del reporte toca <b>Registrar acción</b>.</li>
+        <li>Elige el tipo (<b>correctiva</b> o <b>preventiva</b>), describe la acción, el área y la persona responsable, la fecha de asignación y la <b>fecha compromiso</b>.</li>
+    </ol>
+    <h3>Ciclo de una acción</h3>
+    <div class="flujo">
+        <span class="paso">Pendiente</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">En proceso</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">Concluida · por verificar</span><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-arrow-right"/></svg>
+        <span class="paso">Verificada</span>
+    </div>
+    <ul>
+        <li><b>Iniciar atención</b>: pasa de Pendiente a En proceso.</li>
+        <li><b>Marcar como concluida</b>: el área informa que la terminó; queda pendiente de verificar.</li>
+        <li><b>Verificar: efectiva</b> (supervisión): confirma que funcionó y la cierra.</li>
+        <li><b>No efectiva · reabrir</b> (supervisión): regresa a En proceso; el comentario es obligatorio y se puede fijar una nueva fecha compromiso.</li>
+        <li><b>Cancelar acción</b> (supervisión): exige el motivo.</li>
+        <li><b>Reprogramar</b>: cambia la fecha compromiso indicando el motivo.</li>
+        <li><b>Evidencia</b>: agrega fotos de lo realizado (hasta 6 por acción).</li>
+    </ul>
+    <p>Una acción abierta con fecha compromiso pasada cuenta como <b>vencida</b> en los indicadores y en el semáforo del reporte.</p>
+</section>
+
+<!-- 9 ------------------------------------------------------------------ -->
+<section class="sec" id="riesgo" data-titulo="Evaluación de riesgo">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>Evaluación de riesgo</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Supervisión · Administrador</span>
+    <p style="margin-top:10px">El riesgo se clasifica con la <b>matriz 5 × 5</b>: la <b>probabilidad</b> (filas, 1 a 5) y la <b>severidad</b> (columnas, A a E). El resultado es un índice como <b>4B</b> y un nivel (por ejemplo, Alto, Medio o Bajo) con su prioridad de atención.</p>
+    <div class="sg-banner info"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-lock"/></svg><span>Solo se registran evaluaciones cuando la matriz está <b>validada institucionalmente</b> por un administrador. Mientras tanto, los botones de evaluar aparecen deshabilitados.</span></div>
+    <h3>Riesgo inicial</h3>
+    <ol class="pasos">
+        <li>En el detalle toca <b>Evaluar riesgo inicial</b>.</li>
+        <li>Elige la celda de la matriz que corresponde al peligro identificado, antes de aplicar medidas.</li>
+        <li>Escribe la justificación (mínimo 10 caracteres) y guarda. Si el nivel tiene plazo configurado, se calcula la fecha límite de atención.</li>
+    </ol>
+    <h3>Riesgo residual</h3>
+    <ol class="pasos">
+        <li>Después de aplicar medidas, toca <b>Registrar riesgo residual</b>.</li>
+        <li>Describe las <b>medidas de mitigación</b> aplicadas (se precargan las acciones registradas; ajústalas), elige la nueva celda y justifica.</li>
+    </ol>
+    <p>El detalle muestra <b>inicial → medidas → residual</b> y el historial de evaluaciones. La tarjeta <b>Pendientes de evaluar</b> de la vista general lista los reportes abiertos sin evaluación.</p>
+</section>
+
+<!-- 10 ----------------------------------------------------------------- -->
+<section class="sec" id="analisis" data-titulo="Análisis estadístico">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chart-bar"/></svg>Análisis estadístico</h2>
+    <p class="lead">Elige un periodo (hoy, ayer, 7 o 30 días, mes actual, mes anterior, 90 días, este año, todo el historial o un rango), un área o una categoría; todo el análisis se recalcula. Los filtros que vengan de la vista general (estatus, riesgo, plazo…) aparecen como etiquetas y también aplican.</p>
+    <ul>
+        <li><b>Evolución de reportes</b>: recibidos (por fecha del reporte) y cerrados (por fecha en que se registró el cierre).</li>
+        <li><b>Reportes por periodo y estatus</b>: cuántos se recibieron en cada periodo y en qué estatus están hoy (nuevos, en atención, resueltos, cerrados sin acción).</li>
+        <li><b>Flujo acumulado</b>: recibidos y cerrados acumulados; la distancia entre las dos curvas son los reportes pendientes.</li>
+        <li><b>Distribución por estatus</b> (dona), <b>concentración por hora del día</b>, <b>tendencia de resolución</b>, <b>hallazgos por área</b>, <b>categorías más frecuentes</b> y <b>clasificación por nivel de riesgo</b>.</li>
+        <li><b>Comparación entre periodos</b>: frente al periodo anterior de igual duración o al mismo periodo del año anterior.</li>
+        <li><b>Indicadores SPI</b>: valor mensual, meta y nivel de alerta de cada indicador configurado.</li>
+        <li><b>Desempeño por área responsable</b>: reportes, cerrados, tiempo de resolución, vencidos y acciones por área.</li>
+        <li><b>Hallazgos recurrentes</b>: categorías y lugares que se repiten (por defecto, 3 o más reportes en 90 días).</li>
+        <li><b>Consistencia de los datos</b>: confirma que las cifras cuadran y señala registros que conviene revisar. Solo informa; no modifica nada.</li>
+    </ul>
+    <h3>Cómo usar las gráficas</h3>
+    <ul>
+        <li><b>Agrupar por</b>: automático (por día hasta 2 meses, por semana hasta 6 meses, por mes después), o elige día, semana o mes.</li>
+        <li>Pasa el cursor sobre una gráfica (o usa las flechas del teclado) para ver el detalle; toca <b>Ver tabla</b> para ver los números exactos.</li>
+        <li>Toca un nombre de la <b>leyenda</b> para ocultar o mostrar esa serie; la escala se ajusta.</li>
+        <li>En <b>Evolución</b> y <b>Flujo acumulado</b>, arrastra sobre la gráfica para <b>acercar</b> un tramo.</li>
+        <li>Toca un <b>periodo</b>, un <b>estatus</b>, un <b>área</b>, una <b>categoría</b> o un <b>nivel de riesgo</b> para filtrar todo el análisis con él; tócalo otra vez para quitar el filtro.</li>
+        <li><b>Restablecer vista</b> quita el zoom y vuelve a mostrar las series ocultas; <b>Restablecer</b> (arriba) quita los filtros.</li>
+        <li>El botón de descarga de cada gráfica la guarda como <b>imagen PNG</b>, con su título, su leyenda y el periodo y los filtros con que se generó.</li>
+    </ul>
+</section>
+
+<!-- 11 ----------------------------------------------------------------- -->
+<section class="sec" id="informe" data-titulo="Informe ejecutivo y exportaciones">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg>Informe ejecutivo y exportaciones</h2>
+    <ol class="pasos">
+        <li>En la vista general aplica los filtros que necesites.</li>
+        <li>Toca <b>Exportar → PDF…</b> o <b>Exportar → Excel (.xlsx)…</b>. Se abre un cuadro para elegir qué incluir.</li>
+        <li>Elige el <b>periodo</b> (el de la vista, uno rápido o un rango), los <b>indicadores</b>, las <b>gráficas</b> (solo PDF), las secciones (comparación con el periodo anterior, tablas de resumen, listado y observaciones), las <b>columnas</b> del listado y, para el PDF, la <b>orientación</b>. Puedes agregar observaciones propias.</li>
+        <li>Toca <b>Generar</b>. Verás el avance por pasos; el archivo se descarga al terminar y puedes cancelar en cualquier momento.</li>
+    </ol>
+    <p>Los demás filtros activos (estatus, área, riesgo, plazo…) siempre se respetan, y el listado trae <b>todos</b> los reportes que los cumplen, no solo la página visible. El cuadro recuerda tus elecciones en este equipo.</p>
+    <ul>
+        <li><b>PDF</b>: encabezado institucional (logotipo, S.A.G.A., título, fecha de generación, periodo y filtros), resumen ejecutivo con las tarjetas de indicadores y su variación, gráficas, tablas, listado y observaciones. Lleva encabezado y pie con «Página X de Y» en cada hoja; las gráficas y las filas nunca se parten entre páginas y la tabla repite su encabezado. En orientación automática usa hoja horizontal cuando el listado tiene muchas columnas. Siempre sale en tema claro.</li>
+        <li><b>Excel</b>: hojas <i>Resumen ejecutivo</i>, <i>Datos generales</i> (una fila por reporte, con filtros y encabezado fijo), <i>Indicadores</i> (con cifras base y cuadre), <i>Comparativas</i> (periodo actual frente al anterior y evolución mensual), <i>Distribuciones</i> e <i>Información de filtros</i>. Fechas y números son reales (se pueden ordenar, filtrar y sumar) y los porcentajes y diferencias son fórmulas. Las fechas muestran la hora del centro de México, igual que el sistema. Un texto que empieza con =, +, - o @ se guarda con un apóstrofo para que no se ejecute como fórmula.</li>
+        <li>Los datos personales del reportante solo se exportan a Excel y solo para supervisión y administración.</li>
+        <li><b>Exportar → Informe ejecutivo para imprimir</b> abre la versión de impresión del navegador (incluye SPI, desempeño por área y recurrencias).</li>
+    </ul>
+    <p>Cada exportación a Excel queda en la bitácora.</p>
+</section>
+
+<!-- 12 ----------------------------------------------------------------- -->
+<section class="sec" id="notificaciones" data-titulo="Notificaciones">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-bell"/></svg>Notificaciones</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-lock"/></svg>Con sesión</span>
+    <ul>
+        <li>La <b>campana</b> de la barra superior muestra un número con lo pendiente: avisos sin leer, reportes vencidos y acciones por verificar.</li>
+        <li>Al abrirla verás <b>Requiere atención</b> (vencidos, próximos a vencer, acciones por verificar y, para supervisión, reportes pendientes de evaluar) y la <b>actividad reciente</b>.</li>
+        <li><b>Ver todas</b> abre el centro de notificaciones con filtros (todas o no leídas, por tipo), paginación y <b>Marcar todo como leído</b>.</li>
+        <li>Cada persona recibe lo de su área; supervisión y administración reciben lo de supervisión.</li>
+    </ul>
+</section>
+
+<!-- 13 ----------------------------------------------------------------- -->
+<section class="sec" id="administracion" data-titulo="Administración">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-settings"/></svg>Administración</h2>
+    <span class="quien"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Administrador (la bitácora también Supervisión)</span>
+    <h3>Usuarios y permisos</h3>
+    <ol class="pasos">
+        <li>Ve a <b>Administración → Usuarios y permisos</b> y toca <b>Nuevo usuario</b>.</li>
+        <li>Escribe nombre y apellidos; el usuario se sugiere solo (por ejemplo, <span class="mono">nombre.apellido</span>). Agrega correo, área, cargo y elige el <b>rol</b>.</li>
+        <li>Deja <b>Generar una contraseña segura</b> y crea la cuenta. La contraseña temporal se muestra <b>una sola vez</b>: cópiala y entrégala de forma segura. Al entrar, la persona deberá cambiarla.</li>
+    </ol>
+    <p>Desde la lista puedes editar datos, rol y área, <b>restablecer la contraseña</b>, <b>desbloquear</b> y <b>desactivar o reactivar</b>. Las cuentas no se eliminan, para conservar el historial de lo que cada quien registró. Nadie puede desactivarse ni cambiarse el rol a sí mismo y siempre queda al menos un administrador activo.</p>
+    <h3>Matriz de riesgo</h3>
+    <p>Define los niveles de probabilidad y severidad, el nivel de cada celda, colores, prioridad y plazo de atención. Cuando la Gerencia de SMS apruebe los criterios, marca <b>Matriz validada institucionalmente</b> y escribe el documento de aprobación; el sistema registra quién la validó y cuándo. Solo entonces se habilitan las evaluaciones.</p>
+    <h3>Indicadores SPI</h3>
+    <p>Agrega indicadores (también hay sugeridos), elige la métrica, si “menor” o “mayor” es mejor, la meta y el nivel de alerta. Aquí se configura también qué cuenta como hallazgo recurrente. El sistema no precarga metas.</p>
+    <h3>Zonas del aeropuerto (opcional)</h3>
+    <p>Captura las zonas autorizadas y activa el módulo. Con él activo, se asigna la zona en el detalle de cada reporte, se puede filtrar por zona y las recurrencias se agrupan por zona. Las zonas no se borran: se desactivan.</p>
+    <h3>Eliminar y restaurar reportes</h3>
+    <ol class="pasos">
+        <li>En la tabla toca <span class="btn-ej"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trash"/></svg></span> (o <b>Eliminar reporte</b> en el detalle).</li>
+        <li>Revisa lo que se eliminará, escribe el <b>motivo</b> y el <b>folio</b> para confirmar.</li>
+        <li>Se guarda una copia completa. Para recuperarlo ve a <b>Administración → Reportes eliminados</b> y toca <b>Restaurar</b>. El folio de un reporte eliminado nunca se vuelve a asignar.</li>
+    </ol>
+    <h3>Respaldos</h3>
+    <p>El sistema guarda una copia completa de la base de datos <b>cada 24 horas</b> mientras el servidor está encendido y conserva las últimas 30. En <b>Administración → Respaldos</b> ves cuándo fue el último y puedes pedir uno con <b>Respaldar ahora</b>. Los respaldos contienen datos personales: cópialos solo a medios autorizados.</p>
+    <h3>Bitácora de auditoría</h3>
+    <p>Registra quién hizo cada cambio, cuándo y desde qué equipo: evaluaciones, compromisos, acciones, usuarios, configuración, eliminaciones y exportaciones. Filtra por tipo de movimiento, folio y fechas.</p>
+</section>
+
+<!-- 14 ----------------------------------------------------------------- -->
+<section class="sec" id="glosario" data-titulo="Glosario">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-tag"/></svg>Glosario</h2>
+    <h3>Estatus de un reporte</h3>
+    <div class="tabla-x"><table>
+        <thead><tr><th>Estatus</th><th>Significado</th></tr></thead>
+        <tbody>
+            <tr><td><span class="estado-badge estado-A">A · Generado</span></td><td>Recién reportado; aún sin atender.</td></tr>
+            <tr><td><span class="estado-badge estado-B">B · Enterado</span></td><td>El área responsable ya lo conoce.</td></tr>
+            <tr><td><span class="estado-badge estado-C">C · En atención</span></td><td>Se está atendiendo.</td></tr>
+            <tr><td><span class="estado-badge estado-D">D · Resuelto</span></td><td>El hallazgo quedó atendido.</td></tr>
+            <tr><td><span class="estado-badge estado-E">E · Duplicado</span></td><td>Es el mismo hallazgo que otro reporte. Se cierra sin acción.</td></tr>
+            <tr><td><span class="estado-badge estado-F">F · No requiere atención</span></td><td>Se revisó y no requiere acción. Se cierra sin acción.</td></tr>
+        </tbody>
+    </table></div>
+    <p style="margin-top:10px"><b>Abiertos</b> = A, B y C. <b>Cerrados</b> = D, E y F. El tiempo de resolución solo considera los Resueltos.</p>
+    <h3>Términos</h3>
+    <ul>
+        <li><b>Folio</b>: identificador único del reporte (RSM-n). Cada seguimiento tiene el suyo (RSM-n-C1, RSM-n-D1…).</li>
+        <li><b>Área responsable / notificada</b>: la responsable atiende y registra seguimientos; las notificadas solo se enteran.</li>
+        <li><b>Fecha compromiso</b>: fecha acordada para atender el reporte o una acción.</li>
+        <li><b>Riesgo inicial / residual</b>: riesgo del peligro antes y después de aplicar medidas de mitigación.</li>
+        <li><b>Mediana</b>: el valor del medio; la mitad de los casos tardó menos. No se distorsiona por casos extremos, a diferencia del promedio.</li>
+        <li><b>SPI</b>: indicador de desempeño de seguridad operacional, con su meta y nivel de alerta.</li>
+        <li><b>Recurrente</b>: categoría o lugar que acumula varios reportes en poco tiempo.</li>
+        <li><b>Bitácora</b>: registro permanente de quién hizo qué y cuándo.</li>
+    </ul>
+</section>
+
+<!-- 15 ----------------------------------------------------------------- -->
+<section class="sec faq" id="faq" data-titulo="Preguntas frecuentes">
+    <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-help"/></svg>Preguntas frecuentes</h2>
+    <details><summary>Dice “Usuario o contraseña incorrectos”.</summary>
+        <p>El usuario no lleva espacios (por ejemplo, <span class="mono">fabrizio.pizano</span>, no “Fabrizio Pizano”); también puedes entrar con tu correo. Revisa mayúsculas en la contraseña. Tras 5 intentos fallidos la cuenta se bloquea 30 minutos; un administrador puede desbloquearla o restablecer tu contraseña.</p></details>
+    <details><summary>No veo los botones para gestionar un reporte.</summary>
+        <p>Debes iniciar sesión y tu rol debe permitirlo (revisa <a href="#roles">Roles y permisos</a>). Los roles de área solo gestionan reportes asignados a su área.</p></details>
+    <details><summary>Los botones de evaluar riesgo están deshabilitados.</summary>
+        <p>La matriz de riesgo aún no está validada. Un administrador debe validarla en <b>Administración → Matriz de riesgo</b>.</p></details>
+    <details><summary>No me deja marcar el reporte como Resuelto.</summary>
+        <p>Tiene acciones correctivas pendientes, en proceso o sin verificar. Concluye las acciones y pide a supervisión que verifique su efectividad (o que cancele las que ya no apliquen).</p></details>
+    <details><summary>Un reporte dice “Sin plazo”.</summary>
+        <p>No tiene fecha compromiso, el nivel de riesgo no fija plazo y no tiene acciones abiertas con fecha. Asigna responsable y fecha compromiso en el detalle.</p></details>
+    <details><summary>¿Cómo marco un reporte como Duplicado o No requiere atención?</summary>
+        <p>En el panel del área, agrega un seguimiento y elige <b>E · Duplicado de otro reporte</b> (escribe el folio del reporte original) o <b>F · No requiere atención</b> (explica el motivo). Si el reporte tiene acciones correctivas abiertas, primero se concluyen o se cancelan.</p></details>
+    <details><summary>Eliminé un reporte por error.</summary>
+        <p>Un administrador puede recuperarlo completo en <b>Administración → Reportes eliminados → Restaurar</b>.</p></details>
+    <details><summary>Al imprimir no salen las gráficas o los colores.</summary>
+        <p>Usa el botón de imprimir del sistema y, si tu navegador lo ofrece, deja activada la opción “Gráficos de fondo”. Para un archivo, elige “Guardar como PDF”.</p></details>
+</section>
+
+                    <p class="sin-resultados" id="sinResultados" hidden>No se encontró nada con esa búsqueda.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var secciones = Array.prototype.slice.call(document.querySelectorAll('.sec'));
+        var indice = document.getElementById('indice');
+        indice.innerHTML = secciones.map(function (s) {
+            return '<li data-para="' + s.id + '"><a href="#' + s.id + '">' + SMS.esc(s.dataset.titulo) + '</a></li>';
+        }).join('');
+        var enlaces = indice.querySelectorAll('a');
+
+        // Ejemplos vivos del semáforo (mismo componente que la tabla)
+        var hoy = new Date();
+        var mas = function (d) { var x = new Date(hoy); x.setDate(x.getDate() + d); return SMS.diaLocal(x); };
+        document.getElementById('ejemplosSemaforo').innerHTML = [
+            SMS.semaforo({ estado: 'C', fecha_vencimiento: mas(-3) }, 7),
+            SMS.semaforo({ estado: 'C', fecha_vencimiento: mas(4) }, 7),
+            SMS.semaforo({ estado: 'C', fecha_vencimiento: mas(20) }, 7),
+            SMS.semaforo({ estado: 'A' }, 7),
+            SMS.semaforo({ estado: 'D', cerrado_en_plazo: true }, 7, { sinDetalle: true }),
+            SMS.semaforo({ estado: 'D', cerrado_en_plazo: false }, 7, { sinDetalle: true })
+        ].join('');
+
+        // Sección activa en el índice
+        if ('IntersectionObserver' in window) {
+            var obs = new IntersectionObserver(function (entradas) {
+                entradas.forEach(function (e) {
+                    if (!e.isIntersecting) return;
+                    enlaces.forEach(function (a) { a.classList.toggle('is-activo', a.getAttribute('href') === '#' + e.target.id); });
+                });
+            }, { rootMargin: '-20% 0px -70% 0px' });
+            secciones.forEach(function (s) { obs.observe(s); });
+        }
+
+        // Búsqueda: oculta secciones sin coincidencias y resalta el texto
+        var originales = secciones.map(function (s) { return s.innerHTML; });
+        function normal(t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+        function resaltar(nodo, q) {
+            var walker = document.createTreeWalker(nodo, NodeFilter.SHOW_TEXT, null);
+            var textos = [];
+            while (walker.nextNode()) textos.push(walker.currentNode);
+            textos.forEach(function (t) {
+                var n = normal(t.nodeValue), i = n.indexOf(q);
+                if (i < 0 || !t.nodeValue.trim()) return;
+                var frag = document.createDocumentFragment(), pos = 0;
+                while (i >= 0) {
+                    frag.appendChild(document.createTextNode(t.nodeValue.slice(pos, i)));
+                    var m = document.createElement('mark'); m.textContent = t.nodeValue.slice(i, i + q.length); frag.appendChild(m);
+                    pos = i + q.length; i = n.indexOf(q, pos);
+                }
+                frag.appendChild(document.createTextNode(t.nodeValue.slice(pos)));
+                t.parentNode.replaceChild(frag, t);
+            });
+        }
+        var temporizador;
+        document.getElementById('buscar').addEventListener('input', function () {
+            var campo = this;
+            clearTimeout(temporizador);
+            temporizador = setTimeout(function () {
+                var q = normal(campo.value.trim());
+                var visibles = 0;
+                secciones.forEach(function (s, i) {
+                    s.innerHTML = originales[i];
+                    var coincide = !q || normal(s.textContent).indexOf(q) >= 0;
+                    s.hidden = !coincide;
+                    indice.querySelector('[data-para="' + s.id + '"]').hidden = !coincide;
+                    if (coincide) { visibles++; if (q.length >= 2) { resaltar(s, q); s.querySelectorAll('details').forEach(function (d) { if (d.querySelector('mark')) d.open = true; }); } }
+                });
+                document.getElementById('sinResultados').hidden = visibles > 0;
+            }, 200);
+        });
+
+        document.getElementById('btnImprimir').addEventListener('click', function () {
+            document.querySelectorAll('.faq details').forEach(function (d) { d.open = true; });
+            window.print();
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Dependencias (se instalan con npm install)
+node_modules/
+
+# Configuración local con claves y contraseñas (usar .env.example como guía)
+.env
+.env.*
+!.env.example
+
+# Ficha del proyecto con correo y teléfono personales de contacto (solo local)
+INFORMACION DEL PROYECTO.txt
+
+# Datos reales y personales: evidencias, respaldos y volcados de la base
+# (base-de-datos/ guarda el respaldo real de la copia local: nunca va a GitHub)
+base-de-datos/
+uploads/
+respaldos/
+database/backup_completo.sql
+*.sql.gz
+*.parcial
+
+# Registros y temporales
+logs/
+*.log
+npm-debug.log*
+coverage/
+.DS_Store
+Thumbs.db

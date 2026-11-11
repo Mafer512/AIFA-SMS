@@ -1,0 +1,48 @@
+<%
+    // Parámetros opcionales:
+    //   inicio  -> destino del lockup (por defecto la vista general)
+    //   enlaces -> [{ href, texto, icono, estilo, actual }]
+    //   meta    -> { titulo, detalle, idDetalle }  (texto a la derecha)
+    //   extra   -> HTML adicional para el área de navegación
+    const _inicio = typeof inicio !== 'undefined' ? inicio : '/reportes/general';
+    const _enlaces = typeof enlaces !== 'undefined' ? enlaces : [];
+    const _meta = typeof meta !== 'undefined' ? meta : null;
+%>
+<header class="sg-appbar">
+    <div class="sg-wrap sg-appbar__in">
+        <a class="sg-lockup" href="<%= _inicio %>" aria-label="S.A.G.A. · Aeropuerto Internacional Felipe Ángeles. Ir al inicio">
+            <%# Logotipo positivo (tema claro) y negativo (tema oscuro); en pantallas angostas solo el isotipo %>
+            <picture class="logo-claro">
+                <source media="(max-width: 480px)" srcset="/img/aifa-isotipo-positivo.svg">
+                <img src="/img/aifa-horizontal-positivo.svg" alt="Aeropuerto Internacional Felipe Ángeles" width="257" height="34">
+            </picture>
+            <picture class="logo-oscuro">
+                <source media="(max-width: 480px)" srcset="/img/aifa-isotipo-negativo.svg">
+                <img src="/img/aifa-horizontal-negativo.svg" alt="" width="257" height="34">
+            </picture>
+            <span class="sep" aria-hidden="true"></span>
+            <span class="sg-saga" aria-hidden="true"><span class="w">S.A.G.A.</span><span class="u"></span></span>
+        </a>
+        <nav class="sg-appbar__nav" aria-label="Navegación">
+            <% if (_meta) { %>
+            <div class="sg-appbar__meta">
+                <strong><%= _meta.titulo %></strong>
+                <span<% if (_meta.idDetalle) { %> id="<%= _meta.idDetalle %>"<% } %>><%= _meta.detalle || '' %></span>
+            </div>
+            <% } %>
+            <button type="button" class="sg-theme" aria-label="Modo oscuro" aria-pressed="false" title="Cambiar a modo oscuro">
+                <svg class="ic ic-luna" aria-hidden="true"><use href="/img/icons.svg#i-moon"/></svg>
+                <svg class="ic ic-sol" aria-hidden="true"><use href="/img/icons.svg#i-sun"/></svg>
+            </button>
+            <% _enlaces.forEach(function (e) { %>
+            <a class="btn <%= e.estilo || 'btn-ghost' %>" href="<%= e.href %>"<% if (e.actual) { %> aria-current="page"<% } %><% if (e.nueva) { %> target="_blank" rel="noopener"<% } %> title="<%= e.texto %>">
+                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-<%= e.icono %>"/></svg><span class="lbl"><%= e.texto %></span>
+            </a>
+            <% }) %>
+            <%- typeof extra !== 'undefined' ? extra : '' %>
+            <a class="btn btn-ghost sg-btn-manual" href="/manual"<% if (typeof manual !== 'undefined' && manual) { %> aria-current="page"<% } %> title="Manual de usuario">
+                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-book"/></svg><span class="lbl">Manual</span>
+            </a>
+        </nav>
+    </div>
+</header>

@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= departamento.nombre %> · Panel de área · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
+        /* Filtros */
+        .filtros { margin-bottom: 24px; }
+        .filtros-in {
+            display: flex; align-items: flex-end; gap: 16px 24px; flex-wrap: wrap;
+        }
+        .filtros-campos {
+            flex: 1 1 560px;
+            display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+        }
+        .filter-group { flex: 1 1 150px; min-width: 140px; }
+        .filtros-orden {
+            flex: 0 0 auto;
+            padding-left: 24px;
+            border-left: 1px solid var(--n100);
+        }
+        .filtros-orden select { min-width: 180px; }
+
+        @media (max-width: 860px) {
+            .filtros-orden { padding-left: 0; border-left: 0; flex: 1 1 100%; }
+            .filtros-campos .btn { flex: 1 1 auto; }
+        }
+
+        /* Tabla */
+        .tabla-titulo {
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+        }
+        .tabla-titulo h2 { font-size: 22px; line-height: 28px; }
+        .tabla-titulo span { font-size: 13px; color: var(--n600); }
+
+        .reportes-table th { white-space: normal; min-width: 96px; }
+        .reportes-table td:nth-child(2), .reportes-table td:nth-child(3) { min-width: 116px; font-variant-numeric: tabular-nums; }
+        .reportes-table td:nth-child(4) { min-width: 150px; }
+        .reportes-table td:nth-child(5), .reportes-table td:nth-child(6) { min-width: 170px; max-width: 280px; color: var(--n700); }
+        .reportes-table td strong { color: var(--n900); }
+        .folio-badge {
+            display: inline-block; padding: 2px 7px;
+            background: var(--n50); border: 1px solid var(--n200); border-radius: 4px;
+            font: 500 12.5px/18px var(--fm); color: var(--n900); white-space: nowrap;
+        }
+
+        .acciones-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 196px; }
+        .acciones-fila .btn-agregar { grid-column: 1 / -1; }
+        .acciones-fila .btn { padding: 0 10px; }
+        .btn-agregar { color: var(--v700); border-color: var(--v400); }
+        .btn-agregar:hover { background: var(--v50); color: var(--v800); border-color: var(--v600); }
+
+        .empty-state { padding: 56px 20px; text-align: center; color: var(--n600); }
+        .empty-state .ic { width: 32px; height: 32px; color: var(--n400); display: block; margin: 0 auto 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* Modal de seguimiento */
+        .modal-header > div { min-width: 0; }
+        .modal-header .sg-eyebrow { display: block; margin-bottom: 4px; }
+        #modalFolio { font-family: var(--fm); letter-spacing: 0; text-transform: none; color: var(--n900); }
+        .modal-close { color: var(--n500); }
+        .modal-close:hover { color: var(--n900); background: var(--n50); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: sg-rise .2s ease; }
+
+        .form-group + .form-group { margin-top: 18px; }
+        .form-group > label {
+            display: block; margin-bottom: 6px;
+            font-size: 13px; font-weight: 600; color: var(--n700);
+        }
+        .form-group small, .form-help { display: block; margin-top: 6px; font-size: 12px; color: var(--n500); }
+        .form-group small:empty { display: none; }
+        .opc { font-weight: 400; color: var(--n500); }
+
+        .file-upload-area {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 24px 16px;
+            background: var(--n50);
+            border: 1.5px dashed var(--n300); border-radius: 12px;
+            text-align: center; color: var(--n700); cursor: pointer;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .file-upload-area:hover { border-color: var(--v600); background: var(--v50); }
+        .file-upload-area:focus-visible { outline: none; box-shadow: var(--focus); }
+        .file-upload-area input[type="file"] { display: none; }
+        .file-upload-area .ic { width: 32px; height: 32px; color: var(--v700); margin-bottom: 4px; }
+        .file-upload-area b { font-size: 14px; }
+        .file-upload-area span { font-size: 12px; color: var(--n500); }
+        #archivos_preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        #archivos_preview:empty { display: none; }
+
+        .form-submit { margin-top: 24px; }
+
+        .areas-intro { color: var(--n600); font-size: 14px; margin-bottom: 16px; }
+        .info-card {
+            margin-bottom: 20px; padding: 14px 16px;
+            background: var(--v50); border: 1px solid var(--v100); border-radius: 8px;
+        }
+        .info-label {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+            font-family: var(--ft); font-size: 10.5px; font-weight: 600;
+            letter-spacing: .12em; text-transform: uppercase; color: var(--v800);
+        }
+        .info-label .ic { width: 16px; height: 16px; }
+        .info-value { font-size: 14px; color: var(--n800); }
+        .lista-areas { margin: 0; padding-left: 18px; line-height: 1.8; }
+        .lista-areas li::marker { color: var(--v600); }
+
+        .departamentos-grid-modal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+        @media (max-width: 640px) {
+            .departamentos-grid-modal {
+                grid-template-columns: 1fr !important;
+                grid-auto-flow: row !important;
+                grid-template-rows: auto !important;
+            }
+        }
+        .area-checkbox-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 12px;
+            border: 1px solid var(--n200); border-radius: 8px;
+            cursor: pointer; font-size: 13.5px;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .area-checkbox-item:hover { border-color: var(--n300); background: var(--n50); }
+        .area-checkbox-item:has(input:checked) { border-color: var(--v600); background: var(--v50); }
+        .area-checkbox-item label { flex: 1; cursor: pointer; user-select: none; line-height: 1.35; }
+        .sin-areas, .cargando { grid-column: 1 / -1; padding: 20px; text-align: center; color: var(--n500); font-size: 13.5px; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    inicio: '/admin/panel/' + encodeURIComponent(departamento.codigo),
+    meta: { titulo: 'Panel de área', detalle: '', idDetalle: 'currentDateTime' },
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ],
+    extra: '<button type="button" class="btn btn-secondary" id="btnSalirPanel" title="Cerrar sesión"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-logout"/></svg><span class="lbl">Salir</span></button>'
+}) %>
+
+    <main class="sg-main container">
+        <div class="sg-wrap">
+            <header class="sg-pagehead header">
+                <span class="sg-kicker">Seguimiento de hallazgos · Panel de área</span>
+                <h1><%= departamento.nombre %></h1>
+                <p>Da seguimiento a los hallazgos asignados a tu área: registra avances, adjunta evidencia y suma a otras áreas cuando sea necesario.</p>
+            </header>
+
+            <div id="tab-seguimiento" class="content-section active">
+                <!-- Filtros -->
+                <section class="sg-card filtros" aria-label="Filtros">
+                    <div class="sg-card__body filtros-in">
+                        <div class="filtros-campos">
+                            <div class="sg-field filter-group">
+                                <label for="filtro_seg_desde">Desde</label>
+                                <input type="date" id="filtro_seg_desde">
+                            </div>
+
+                            <div class="sg-field filter-group">
+                                <label for="filtro_seg_hasta">Hasta</label>
+                                <input type="date" id="filtro_seg_hasta">
+                            </div>
+
+                            <div class="sg-field filter-group">
+                                <label for="filtro_seg_estado">Estatus</label>
+                                <select id="filtro_seg_estado">
+                                    <option value="">Todos</option>
+                                    <option value="A">A · Generado</option>
+                                    <option value="B">B · Enterado</option>
+                                    <option value="C">C · En atención</option>
+                                    <option value="D">D · Resuelto</option>
+                                </select>
+                            </div>
+
+                            <button type="button" class="btn btn-primary" id="btnFiltrarSeguimientos">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-filter"/></svg>
+                                Filtrar
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="btnLimpiarSeguimientos">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-refresh"/></svg>
+                                Limpiar
+                            </button>
+                        </div>
+
+                        <div class="sg-field filtros-orden">
+                            <label for="filtro_seg_orden">Ordenar</label>
+                            <select id="filtro_seg_orden">
+                                <option value="recientes">Más recientes primero</option>
+                                <option value="antiguos">Más antiguos primero</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="tabla-titulo">
+                    <h2>Hallazgos del área</h2>
+                    <span>Último seguimiento de cada reporte</span>
+                </div>
+
+                <div class="sg-table-wrap">
+                    <table class="sg-table reportes-table">
+                        <thead>
+                            <tr>
+                                <th>Folio de seguimiento</th>
+                                <th>Fecha del reporte</th>
+                                <th>Última actualización</th>
+                                <th>Categoría del hallazgo</th>
+                                <th>Descripción del reporte</th>
+                                <th>Último seguimiento</th>
+                                <th>Estatus</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="seguimientosBody">
+                            <tr>
+                                <td colspan="8" class="empty-state">
+                                    <span class="sg-spinner" aria-hidden="true"></span>
+                                    <p>Cargando seguimientos…</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <div class="modal sg-backdrop" id="modalSeguimiento">
+        <div class="modal-content sg-dialog" role="dialog" aria-modal="true" aria-labelledby="tituloModal">
+            <div class="modal-header sg-dialog__head">
+                <div>
+                    <span class="sg-eyebrow">Reporte <span id="modalFolio"></span></span>
+                    <h3 class="modal-title sg-dialog__title" id="tituloModal">Gestión de seguimiento</h3>
+                </div>
+                <button type="button" class="modal-close btn btn-ghost btn-icon" id="btnCerrarModal" aria-label="Cerrar">
+                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-x"/></svg>
+                </button>
+            </div>
+
+            <!-- Pestañas -->
+            <div class="tabs-modal sg-tabs" role="tablist">
+                <button type="button" class="tab-modal sg-tab active" data-tab="seguimiento" role="tab">Agregar seguimiento</button>
+                <button type="button" class="tab-modal sg-tab" data-tab="areas" role="tab">Agregar área</button>
+            </div>
+
+            <div class="modal-body sg-dialog__body">
+                <!-- Pestaña 1: Agregar seguimiento -->
+                <div class="tab-content active" id="tab-modal-seguimiento" role="tabpanel">
+                    <form id="formSeguimiento">
+                        <input type="hidden" id="seguimiento_id_reporte">
+
+                        <div class="form-group">
+                            <label for="seguimiento_estado">Estatus del seguimiento <span class="req" aria-hidden="true">*</span></label>
+                            <select id="seguimiento_estado" required>
+                                <option value="">Selecciona…</option>
+                                <option value="B">B · Enterado</option>
+                                <option value="C">C · En atención</option>
+                                <option value="D">D · Resuelto</option>
+                                <optgroup label="Cerrar sin acción">
+                                    <option value="E">E · Duplicado de otro reporte</option>
+                                    <option value="F">F · No requiere atención</option>
+                                </optgroup>
+                            </select>
+                            <small id="ayudaEstado"></small>
+                        </div>
+
+                        <div class="form-group" id="grupoFolioOriginal" hidden>
+                            <label for="seguimiento_folio_original">Folio del reporte original <span class="req" aria-hidden="true">*</span></label>
+                            <input type="text" id="seguimiento_folio_original" placeholder="Ej. RSM-22" maxlength="20" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
+                            <small>El reporte que ya registra este mismo hallazgo. El seguimiento quedará como “Duplicado de …”.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="seguimiento_fecha_evento">Fecha del evento <span class="opc">(opcional)</span></label>
+                            <input type="date" id="seguimiento_fecha_evento">
+                            <small>Si no seleccionas una fecha, se usará la fecha de hoy.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="seguimiento_descripcion" id="etqDescripcion">Descripción del seguimiento <span class="opc">(opcional)</span></label>
+                            <textarea id="seguimiento_descripcion" placeholder="Describe las acciones realizadas…"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="seguimiento_archivos">Evidencia gráfica <span class="opc">(opcional)</span></label>
+                            <div class="file-upload-area" id="fileUploadArea" tabindex="0" role="button" aria-label="Seleccionar fotos de evidencia">
+                                <input type="file" id="seguimiento_archivos" accept="image/*" multiple>
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-camera"/></svg>
+                                <b>Seleccionar fotos</b>
+                                <span>Máximo 3 imágenes · 10 MB cada una</span>
+                            </div>
+                            <div id="archivos_preview"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg btn-block form-submit" id="btnEnviarSeguimiento">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-send"/></svg>
+                            Enviar seguimiento
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Pestaña 2: Agregar área -->
+                <div class="tab-content" id="tab-modal-areas" role="tabpanel">
+                    <p class="areas-intro">Selecciona las áreas que se sumarán al seguimiento de este hallazgo.</p>
+
+                    <div class="info-card">
+                        <div class="info-label">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-building"/></svg>
+                            Áreas ya notificadas
+                        </div>
+                        <div class="info-value" id="areasNotificadasList">
+                            <p class="cargando">Cargando…</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Áreas por agregar</label>
+                        <div id="areasDisponiblesGrid" class="departamentos-grid-modal">
+                            <p class="cargando">Cargando…</p>
+                        </div>
+                    </div>
+
+                    <button type="button" id="btnAgregarAreas" class="btn btn-primary btn-lg btn-block form-submit" disabled>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>
+                        Agregar áreas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEPARTAMENTO_ID = <%= departamento.id %>;
+        const DEPARTAMENTO_CODIGO = '<%= departamento.codigo %>';
+        const API_BASE = '';  // Base vacía porque las rutas son relativas
+
+        // Escapar texto antes de insertarlo como HTML
+        function esc(valor) {
+            return String(valor ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Cerrar sesión
+        document.getElementById('btnSalirPanel').addEventListener('click', function() {
+            try {
+                localStorage.removeItem('rsm_token');
+                localStorage.removeItem('rsm_usuario');
+            } catch (e) { /* sin acceso a localStorage */ }
+            window.location.href = '/login';
+        });
+        
+        console.log('Script cargado');
+        console.log('Departamento ID:', DEPARTAMENTO_ID);
+        
+        function actualizarReloj() {
+            const ahora = new Date();
+            const elem = document.getElementById('currentDateTime');
+            if (elem) {
+                elem.textContent = ahora.toLocaleString('es-MX', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+        }
+        
+        setInterval(actualizarReloj, 1000);
+        actualizarReloj();
+
+        async function cargarReportes() {
+            try {
+                console.log('Cargando reportes...');
+                const desde = document.getElementById('filtroDesde').value;
+                const hasta = document.getElementById('filtroHasta').value;
+                const orden = document.getElementById('filtroOrden').value;
+
+                console.log('Filtros reportes:', { desde, hasta, orden });
+
+                let url = `/api/departamento/${DEPARTAMENTO_ID}/reportes?orden=${orden}`;
+                if (desde && hasta) {
+                    url += `&desde=${desde}&hasta=${hasta}`;
+                }
+
+                console.log('URL reportes:', url);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log('Data reportes:', data);
+                console.log('Success:', data.success);
+                console.log('Reportes:', data.reportes);
+                console.log('Length:', data.reportes ? data.reportes.length : 'undefined');
+                console.log('Tipo de reportes:', typeof data.reportes);
+                console.log('Es array?:', Array.isArray(data.reportes));
+
+                const tbody = document.getElementById('reportesBody');
+                console.log('Elemento tbody:', tbody);
+                if (!tbody) {
+                    console.error('ERROR: No se encontró el elemento reportesBody');
+                    return;
+                }
+                console.log('Existe tbody?:', tbody !== null);
+
+                // ⭐ NUEVO: Verificar success y reportes
+                console.log('Verificando condición...');
+                console.log('   data.success:', data.success);
+                console.log('   data.reportes existe:', !!data.reportes);
+                console.log('   data.reportes.length:', data.reportes ? data.reportes.length : 'N/A');
+
+                if (!data.success) {
+                    console.error('ERROR: success es false');
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                ${SAGA.icono('warn')}
+                                <p>Error: ${data.error || 'Error desconocido'}</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                if (!data.reportes || !Array.isArray(data.reportes)) {
+                    console.error('ERROR: reportes no es un array válido');
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                ${SAGA.icono('warn')}
+                                <p>Error: Formato de datos incorrecto</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                if (data.reportes.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                ${SAGA.icono('inbox')}
+                                <p>No hay reportes para mostrar</p>
+                            </td>
+                        </tr>
+                    `;
+                    console.log('No hay reportes');
+                    return;
+                }
+
+                console.log(`${data.reportes.length} reportes encontrados`);
+
+                tbody.innerHTML = data.seguimientos.map(s => {
+                    // Truncar departamentos responsables si son muy largos
+                    const deptos = s.departamentos_responsables || 'Sin departamento';
+                    const deptosDisplay = deptos.length > 50 ? deptos.substring(0, 47) + '...' : deptos;
+
+                    return `
+                        <tr>
+                            <td><span class="folio-badge">${s.folio_seguimiento}</span></td>
+                            <td>${formatearFecha(s.reporte_fecha)}</td>
+                            <td>${formatearFecha(s.seguimiento_fecha)}</td>
+                            <td>
+                                <span class="sg-chip" title="${esc(deptos)}">
+                                    ${esc(deptosDisplay)}
+                                </span>
+                            </td>
+                            <td><strong>${esc(s.tipo_problema)}</strong></td>
+                            <td>${esc(truncar(s.reporte_descripcion, 60))}</td>
+                            <td>${s.seguimiento_descripcion ? esc(truncar(s.seguimiento_descripcion, 60)) : '<em class="nd">Sin descripción</em>'}</td>
+                            <td>
+                                <span class="estado-badge estado-${s.seguimiento_estado}">
+                                    ${traducirEstado(s.seguimiento_estado)}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="/reportes/${s.reporte_folio}/historial" target="_blank" rel="noopener" class="btn btn-secondary btn-sm btn-ver">${SAGA.icono('history')}
+                                    Historial
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('ERROR CRÍTICO cargando reportes:', error);
+                console.error('   Tipo de error:', error.name);
+                console.error('   Mensaje:', error.message);
+                console.error('   Stack:', error.stack);
+                const tbody = document.getElementById('reportesBody');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            ${SAGA.icono('warn')}
+                            <p>Error al cargar reportes. Por favor recarga la página.</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        /*
+         Formatear fecha y hora en formato español
+         @param {string} fechaMySQL - Fecha en formato MySQL (YYYY-MM-DD HH:mm:ss)
+         @returns {string} Fecha formateada (01 nov 2025, 01:45 p.m.)
+         */
+        function formatearFechaHora(fechaMySQL) {
+            if (!fechaMySQL) return 'N/A';
+            
+            try {
+                const fecha = new Date(fechaMySQL);
+                if (isNaN(fecha.getTime())) return 'Fecha inválida';
+                
+                const opciones = {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                };
+                
+                return new Intl.DateTimeFormat('es-MX', opciones).format(fecha);
+            } catch (error) {
+                console.error('Error formateando fecha:', error);
+                return 'Error';
+            }
+        }
+        
+        async function cargarSeguimientos() {
+            try {
+                console.log('Cargando seguimientos...');
+                
+                //OBTENER FILTROS
+                const desde = document.getElementById('filtro_seg_desde').value;
+                const hasta = document.getElementById('filtro_seg_hasta').value;
+                const estado = document.getElementById('filtro_seg_estado').value;
+                const orden = document.getElementById('filtro_seg_orden').value;
+                
+                console.log('Filtros:', { desde, hasta, estado, orden });
+                
+                //CONSTRUIR URL CON FILTROS
+                let url = `/api/departamento/${DEPARTAMENTO_ID}/seguimientos?`;
+                if (desde && hasta) url += `desde=${desde}&hasta=${hasta}&`;
+                if (estado) url += `estado=${estado}&`;
+                if (orden) url += `orden=${orden}&`;
+                
+                console.log('URL:', url);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('Seguimientos recibidos:', data);
+                console.log('Success:', data.success);
+                console.log('Seguimientos array:', data.seguimientos);
+                console.log('Número de seguimientos:', data.seguimientos ? data.seguimientos.length : 0);
+                
+                const tbody = document.getElementById('seguimientosBody');
+                
+                if (!data.success || !data.seguimientos || data.seguimientos.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="empty-state">
+                                ${SAGA.icono('inbox')}
+                                <p>No hay seguimientos para mostrar</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                const reportesMap = new Map();
+                data.seguimientos.forEach(s => {
+                    if (!reportesMap.has(s.id_reporte)) {
+                        reportesMap.set(s.id_reporte, s);
+                    } else {
+                        const existente = reportesMap.get(s.id_reporte);
+                        if (new Date(s.fecha) > new Date(existente.fecha)) {
+                            reportesMap.set(s.id_reporte, s);
+                        }
+                    }
+                });
+                
+                const reportesArray = Array.from(reportesMap.values());
+                
+                // APLICAR ORDENAMIENTO (orden ya está definido arriba)
+                if (orden === 'antiguos') {
+                    reportesArray.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                    console.log('Ordenados: Más antiguos primero');
+                } else {
+                    reportesArray.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+                    console.log('Ordenados: Más recientes primero');
+                }
+                
+                tbody.innerHTML = reportesArray.map(s => `
+                    <tr>
+                        <td><span class="folio-badge">${s.folio_seguimiento}</span></td>
+                        <td>${formatearFechaHora(s.reporte_fecha)}</td>
+                        <td>${formatearFecha(s.fecha)}</td>
+                        <td><strong>${esc(s.tipo_problema)}</strong></td>
+                        <td>${esc(truncar(s.reporte_descripcion, 60))}</td>
+                        <td>${s.descripcion ? esc(truncar(s.descripcion, 60)) : '<em class="nd">Sin seguimiento aún</em>'}</td>
+                        <td>
+                            <span class="estado-badge estado-${s.estado}">
+                                ${s.estado} - ${traducirEstado(s.estado)}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="acciones-fila">
+                                <button type="button" class="btn btn-secondary btn-sm btn-agregar btn-seguimiento" data-id="${s.id_reporte}" data-folio="${esc(s.reporte_folio)}">
+                                    ${SAGA.icono('plus')}Seguimiento
+                                </button>
+                                <a href="/reportes/${encodeURIComponent(s.reporte_folio)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                                    ${SAGA.icono('doc')}Reporte
+                                </a>
+                                <a href="/reportes/${encodeURIComponent(s.reporte_folio)}/historial" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                                    ${SAGA.icono('history')}Historial
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Agregar event listeners a TODOS los botones de agregar
+                document.querySelectorAll('.btn-seguimiento').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const idReporte = this.getAttribute('data-id');
+                        const folio = this.getAttribute('data-folio');
+                        console.log('Botón clickeado - ID:', idReporte, 'Folio:', folio);
+                        abrirModal(idReporte, folio);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error cargando seguimientos:', error);
+            }
+        }
+        
+        // FUNCIONES PARA SEGUIMIENTOS NOTIFICADOS
+        // =======================================
+        
+        async function cargarSeguimientosNotificados() {
+            try {
+                console.log('Cargando seguimientos notificados...');
+                
+                // Construir URL con filtros
+                let url = `/api/departamento/${DEPARTAMENTO_ID}/seguimientos-notificados?`;
+                
+                const desde = document.getElementById('filtro_notif_desde').value;
+                const hasta = document.getElementById('filtro_notif_hasta').value;
+                const deptResp = document.getElementById('filtro_notif_dept_responsable').value;
+                const tipo = document.getElementById('filtro_notif_tipo').value;
+                const estado = document.getElementById('filtro_notif_estado').value;
+                const orden = document.getElementById('filtro_notif_orden').value;
+                
+                console.log('Filtros notificados:', { desde, hasta, deptResp, tipo, estado, orden });
+                
+                if (desde && hasta) url += `desde=${desde}&hasta=${hasta}&`;
+                if (tipo) url += `tipo_problema=${encodeURIComponent(tipo)}&`;
+                if (estado) url += `estado=${estado}&`;
+                if (orden) url += `orden=${orden}&`;
+                
+                console.log('URL notificados:', url);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('notificadosBody');
+                
+                if (!data.success || !data.seguimientos || data.seguimientos.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                ${SAGA.icono('inbox')}
+                                <p>No hay seguimientos notificados para mostrar</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = data.seguimientos.map(s => `
+                    <tr>
+                        <td><span class="folio-badge">${s.folio_seguimiento}</span></td>
+                        <td>${formatearFecha(s.reporte_fecha)}</td>
+                        <td>${formatearFecha(s.seguimiento_fecha)}</td>
+                        <td>
+                            <span class="sg-chip">
+                                ${esc(s.departamento_responsable_nombre)}
+                            </span>
+                        </td>
+                        <td><strong>${esc(s.tipo_problema)}</strong></td>
+                        <td>${esc(truncar(s.reporte_descripcion, 60))}</td>
+                        <td>${s.seguimiento_descripcion ? esc(truncar(s.seguimiento_descripcion, 60)) : '<em class="nd">Sin descripción</em>'}</td>
+                        <td>
+                            <span class="estado-badge estado-${s.seguimiento_estado}">
+                                ${traducirEstado(s.seguimiento_estado)}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="/reportes/${s.reporte_folio}/historial" target="_blank" rel="noopener" class="btn btn-secondary btn-sm btn-ver">${SAGA.icono('history')}
+                                Historial
+                            </a>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                console.log(`${data.seguimientos.length} seguimientos notificados cargados`);
+                
+            } catch (error) {
+                console.error(' Error cargando seguimientos notificados:', error);
+                document.getElementById('notificadosBody').innerHTML = `
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            ${SAGA.icono('crit')}
+                            <p>Error al cargar los seguimientos</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        
+        function aplicarFiltrosNotificados() {
+            console.log('Aplicando filtros de notificados...');
+            cargarSeguimientosNotificados();
+        }
+        
+        function limpiarFiltrosNotificados() {
+            console.log('Limpiando filtros de notificados...');
+            document.getElementById('filtro_notif_desde').value = '';
+            document.getElementById('filtro_notif_hasta').value = '';
+            document.getElementById('filtro_notif_dept_responsable').value = '';
+            document.getElementById('filtro_notif_tipo').value = '';
+            document.getElementById('filtro_notif_estado').value = '';
+            document.getElementById('filtro_notif_orden').value = 'recientes';
+            console.log('Filtros limpiados, recargando...');
+            cargarSeguimientosNotificados();
+        }
+
+        function aplicarFiltrosReportes() {
+            cargarReportes();
+        }
+
+        function limpiarFiltrosReportes() {
+            document.getElementById('filtroDesde').value = '';
+            document.getElementById('filtroHasta').value = '';
+            document.getElementById('filtroOrden').value = 'recientes';
+            cargarReportes();
+        }
+        
+        function aplicarFiltrosSeguimientos() {
+            console.log('Aplicando filtros de seguimientos...');
+            cargarSeguimientos();
+        }
+
+        function limpiarFiltrosSeguimientos() {
+            console.log('Limpiando filtros de seguimientos...');
+            document.getElementById('filtro_seg_desde').value = '';
+            document.getElementById('filtro_seg_hasta').value = '';
+            document.getElementById('filtro_seg_estado').value = '';
+            document.getElementById('filtro_seg_orden').value = 'recientes';
+            cargarSeguimientos();
+        }
+
+        function abrirModal(idReporte, folio) {
+            console.log('Abriendo modal - ID:', idReporte, 'Folio:', folio);
+            document.getElementById('seguimiento_id_reporte').value = idReporte;
+            document.getElementById('modalFolio').textContent = folio || '';
+            document.getElementById('modalSeguimiento').classList.add('show');
+        }
+
+        function cerrarModal() {
+            console.log('Cerrando modal');
+            document.getElementById('modalSeguimiento').classList.remove('show');
+            document.getElementById('formSeguimiento').reset();
+            actualizarCamposCierre();
+            document.getElementById('archivos_preview').innerHTML = '';
+            document.getElementById('seguimiento_fecha_evento').value = ''; // Limpiar fecha
+        }
+
+        // Campos según el estatus elegido (Duplicado pide el folio original; No requiere atención, el motivo)
+        function actualizarCamposCierre() {
+            const e = document.getElementById('seguimiento_estado').value;
+            document.getElementById('grupoFolioOriginal').hidden = e !== 'E';
+            document.getElementById('etqDescripcion').innerHTML = e === 'F'
+                ? 'Motivo por el que no requiere atención <span class="req" aria-hidden="true">*</span>'
+                : 'Descripción del seguimiento <span class="opc">(opcional)</span>';
+            const ayuda = {
+                B: 'El área ya conoce el hallazgo.',
+                C: 'El hallazgo se está atendiendo.',
+                D: 'El hallazgo quedó atendido. No se permite si hay acciones correctivas abiertas o sin verificar.',
+                E: 'Cierra el reporte porque el mismo hallazgo ya está registrado en otro reporte.',
+                F: 'Cierra el reporte porque se revisó y no requiere acción.'
+            };
+            document.getElementById('ayudaEstado').textContent = ayuda[e] || '';
+        }
+        document.addEventListener('change', function (ev) {
+            if (ev.target && ev.target.id === 'seguimiento_estado') actualizarCamposCierre();
+        });
+
+        function formatearFecha(fecha) {
+            return new Date(fecha).toLocaleDateString('es-MX', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function truncar(texto, max) {
+            if (!texto) return '';
+            return texto.length > max ? texto.substring(0, max) + '...' : texto;
+        }
+
+        function traducirEstado(estado) {
+            const estados = {
+                'A': 'Generado',
+                'B': 'Enterado',
+                'C': 'En Atención',
+                'D': 'Resuelto',
+                'E': 'Duplicado',
+                'F': 'No Requiere'
+            };
+            return estados[estado] || estado;
+        }
+
+        function mostrarToast(mensaje, tipo) {
+            SAGA.toast(mensaje, tipo || 'error');
+        }
+
+        // CARGAR DEPARTAMENTOS RESPONSABLES EN FILTRO
+        // ===========================================
+        async function cargarDepartamentosResponsables() {
+            try {
+                console.log('Cargando departamentos responsables...');
+                const response = await fetch('/api/departamentos-responsables');
+                const data = await response.json();
+                
+                if (data.success && data.departamentos) {
+                    // Llenar AMBOS selects de departamentos responsables
+                    const selectSeguimientos = document.getElementById('filtro_seg_departamento_responsable');
+                    const selectNotificados = document.getElementById('filtro_notif_dept_responsable');
+
+                    // Limpiar opciones existentes excepto "Todos"
+                    // Llenar select de Seguimientos
+                    if (selectSeguimientos) {
+                        while (selectSeguimientos.options.length > 1) {
+                            selectSeguimientos.remove(1);
+                        }
+                        data.departamentos.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept.id;
+                            option.textContent = `${dept.nombre}`;
+                            selectSeguimientos.appendChild(option);
+                        });
+                    }
+
+                    // Llenar select de Notificados
+                    if (selectNotificados) {
+                        while (selectNotificados.options.length > 1) {
+                            selectNotificados.remove(1);
+                        }
+                        data.departamentos.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept.id;
+                            option.textContent = `${dept.nombre}`;
+                            selectNotificados.appendChild(option);
+                        });
+                    }
+                    
+                    console.log(`${data.departamentos.length} departamentos responsables cargados`);
+                }
+            } catch (error) {
+                console.error('Error cargando departamentos responsables:', error);
+            }
+        }
+
+
+        
+        
+        // FUNCIONES PARA GESTIÓN DE ÁREAS EN MODAL
+        // ========================================
+        
+         //Inicializar pestañas del modal
+        function inicializarPestañasModal() {
+            const tabButtons = document.querySelectorAll('.tab-modal');
+            const tabContents = document.querySelectorAll('#modalSeguimiento .tab-content');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    console.log('Cambiando pestaña:', button.getAttribute('data-tab'));
+                    
+                    // Remover active de todos los botones y contenidos del modal
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Agregar active al clickeado
+                    button.classList.add('active');
+                    const tabId = button.getAttribute('data-tab');
+                    const targetContent = document.getElementById(`tab-modal-${tabId}`);
+                    
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                        console.log('Pestaña activada:', tabId);
+                    } else {
+                        console.error('No se encontró el contenido de la pestaña:', `tab-modal-${tabId}`);
+                    }
+                    
+                    // Si se abre la pestaña de áreas, cargar datos
+                    if (tabId === 'areas') {
+                        cargarAreasParaReporte();
+                    }
+                });
+            });
+            
+            console.log('Pestañas del modal inicializadas');
+        }
+        
+         //Cargar áreas notificadas y disponibles para el reporte actual
+        async function cargarAreasParaReporte() {
+            const idReporte = document.getElementById('seguimiento_id_reporte').value;
+            
+            if (!idReporte) {
+                console.error('No hay ID de reporte seleccionado');
+                return;
+            }
+            
+            console.log('Cargando áreas para reporte:', idReporte);
+            
+            try {
+                // Cargar áreas ya notificadas
+                const respNotificadas = await fetch(`/api/reporte/${idReporte}/areas-notificadas`);
+                const dataNotificadas = await respNotificadas.json();
+                
+                if (dataNotificadas.success) {
+                    mostrarAreasNotificadas(dataNotificadas.departamentos);
+                }
+                
+                // Cargar áreas disponibles
+                const respDisponibles = await fetch(`/api/reporte/${idReporte}/areas-disponibles`);
+                const dataDisponibles = await respDisponibles.json();
+                
+                if (dataDisponibles.success) {
+                    mostrarAreasDisponibles(dataDisponibles.departamentos);
+                }
+            } catch (error) {
+                console.error('Error cargando áreas:', error);
+                mostrarToast('Error al cargar las áreas. Intenta nuevamente.', 'error');
+            }
+        }
+        
+         //Renderizar la lista de áreas ya notificadas
+        function mostrarAreasNotificadas(departamentos) {
+            const container = document.getElementById('areasNotificadasList');
+            
+            if (!departamentos || departamentos.length === 0) {
+                container.innerHTML = '<em class="nd">No hay áreas notificadas</em>';
+                return;
+            }
+            
+            const ul = document.createElement('ul');
+            ul.className = 'lista-areas';
+            
+            departamentos.forEach(dept => {
+                const li = document.createElement('li');
+                li.textContent = dept.nombre;
+                ul.appendChild(li);
+            });
+            
+            container.innerHTML = '';
+            container.appendChild(ul);
+            
+            console.log(`${departamentos.length} áreas notificadas mostradas`);
+        }
+        
+         //(Renderizar los checkboxes de áreas disponibles para agregar
+        
+        function mostrarAreasDisponibles(departamentos) {
+            const container = document.getElementById('areasDisponiblesGrid');
+            
+            if (!departamentos || departamentos.length === 0) {
+                container.innerHTML = '<p class="sin-areas">No hay áreas adicionales disponibles para agregar.</p>';
+                document.getElementById('btnAgregarAreas').disabled = true;
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            // Calcular punto medio para dividir en dos columnas
+            const total = departamentos.length;
+            const puntoMedio = Math.ceil(total / 2);
+            
+            // Configurar grid con número de filas
+            container.style.gridTemplateRows = `repeat(${puntoMedio}, auto)`;
+            container.style.gridAutoFlow = 'column';
+            
+            // Función para crear checkbox
+            function crearCheckbox(dept) {
+                const item = document.createElement('div');
+                item.className = 'area-checkbox-item';
+                item.innerHTML = `
+                    <input type="checkbox" id="area_${dept.id}" value="${dept.id}" class="area-checkbox">
+                    <label for="area_${dept.id}">${esc(dept.nombre)}</label>
+                `;
+                
+                // Click en el div también marca/desmarca el checkbox
+                item.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL') {
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                    }
+                });
+                
+                return item;
+            }
+            
+            // Renderizar todos los departamentos en orden
+            departamentos.forEach(dept => {
+                container.appendChild(crearCheckbox(dept));
+            });
+            
+            document.getElementById('btnAgregarAreas').disabled = false;
+            console.log(` ${departamentos.length} áreas disponibles mostradas en 2 columnas`);
+        }
+        
+         //Enviar las áreas seleccionadas al backend
+        async function agregarAreasAlReporte() {
+            const idReporte = document.getElementById('seguimiento_id_reporte').value;
+            const checkboxes = document.querySelectorAll('.area-checkbox:checked');
+            
+            if (checkboxes.length === 0) {
+                mostrarToast('Selecciona al menos un área', 'warning');
+                return;
+            }
+            
+            const departamentosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            
+            console.log('Enviando áreas al reporte:', idReporte);
+            console.log('Departamentos:', departamentosIds);
+            
+            try {
+                const response = await fetch(`/api/reporte/${idReporte}/agregar-areas`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        departamentos: departamentosIds
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarToast(`${data.areas_agregadas} área(s) agregada(s) correctamente`, 'success');
+                    
+                    // Cerrar modal y recargar seguimientos
+                    document.getElementById('modalSeguimiento').classList.remove('show');
+                    cargarSeguimientos();
+                } else {
+                    mostrarToast('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error agregando áreas:', error);
+                mostrarToast('Error al agregar áreas. Intenta nuevamente.', 'error');
+            }
+        }
+        
+        // INICIALIZACIÓN
+        // ==============
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM cargado');
+            
+            setupTabs();
+            // ⭐ NUEVO: Cargar departamentos responsables para filtros
+            cargarDepartamentosResponsables();
+            
+            // EVENT LISTENERS DE PESTAÑAS
+            // ===========================
+            function setupTabs() {
+                console.log('Configurando pestañas...');
+
+                // Pestaña 1: Reportes Notificados
+                const tabReportes = document.getElementById('tab-btn-reportes');
+                if (tabReportes) {
+                    tabReportes.addEventListener('click', function() {
+                        console.log('Click en pestaña Reportes Notificados');
+                        cambiarTab('reportes');
+                    });
+                }
+
+                // Pestaña 2: Seguimiento de Reportes
+                const tabSeguimiento = document.getElementById('tab-btn-seguimiento');
+                if (tabSeguimiento) {
+                    tabSeguimiento.addEventListener('click', function() {
+                        console.log('Click en pestaña Seguimiento');
+                        cambiarTab('seguimiento');
+                    });
+                }
+
+                // Pestaña 3: Seguimientos Notificados
+                const tabNotificados = document.getElementById('tab-btn-notificados');
+                if (tabNotificados) {
+                    tabNotificados.addEventListener('click', function() {
+                        console.log('Click en pestaña Seguimientos Notificados');
+                        cambiarTab('notificados');
+                    });
+                }
+
+                console.log('Pestañas configuradas');
+            }
+
+            function cambiarTab(nombreTab) {
+                console.log(`Cambiando a pestaña: ${nombreTab}`);
+
+                // Remover todas las clases active
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+
+                // Activar pestaña y contenido correspondiente
+                if (nombreTab === 'reportes') {
+                    document.getElementById('tab-btn-reportes').classList.add('active');
+                    document.getElementById('tab-reportes').classList.add('active');
+                    cargarReportes();
+                } else if (nombreTab === 'seguimiento') {
+                    document.getElementById('tab-btn-seguimiento').classList.add('active');
+                    document.getElementById('tab-seguimiento').classList.add('active');
+                    cargarSeguimientos();
+                } else if (nombreTab === 'notificados') {
+                    document.getElementById('tab-btn-notificados').classList.add('active');
+                    document.getElementById('tab-notificados').classList.add('active');
+                    cargarSeguimientosNotificados();
+                }
+
+                console.log(`Pestaña ${nombreTab} activada`);
+            }
+            
+            // Cerrar modal
+            document.getElementById('btnCerrarModal').addEventListener('click', cerrarModal);
+            document.getElementById('modalSeguimiento').addEventListener('click', function(e) {
+                if (e.target === this) cerrarModal();
+            });
+            
+            // Upload area
+            document.getElementById('fileUploadArea').addEventListener('click', function(e) {
+                if (e.target.id === 'seguimiento_archivos') return;
+                document.getElementById('seguimiento_archivos').click();
+            });
+            document.getElementById('fileUploadArea').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    document.getElementById('seguimiento_archivos').click();
+                }
+            });
+            
+            // Preview archivos
+            document.getElementById('seguimiento_archivos').addEventListener('change', function(e) {
+                const files = Array.from(e.target.files);
+                if (files.length > 3) {
+                    mostrarToast('Máximo 3 archivos', 'error');
+                    e.target.value = '';
+                    return;
+                }
+                document.getElementById('archivos_preview').innerHTML = files.map(f => `
+                    <span class="sg-chip">${SAGA.icono('paperclip')}${esc(f.name)}</span>
+                `).join('');
+            });
+            
+            // Form submit
+            document.getElementById('formSeguimiento').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                console.log('Enviando seguimiento...');
+
+                const formData = new FormData();
+                formData.append('id_reporte', document.getElementById('seguimiento_id_reporte').value);
+                formData.append('id_departamento', DEPARTAMENTO_ID);
+                const estadoElegido = document.getElementById('seguimiento_estado').value;
+                formData.append('estado', estadoElegido);
+
+                // Descripción es opcional, salvo para "No requiere atención"
+                const descripcion = document.getElementById('seguimiento_descripcion').value.trim();
+                if (estadoElegido === 'E') {
+                    const original = document.getElementById('seguimiento_folio_original').value.trim().toUpperCase();
+                    if (!/^RSM-\d+$/.test(original)) {
+                        mostrarToast('Escribe el folio del reporte original, por ejemplo RSM-22', 'error');
+                        document.getElementById('seguimiento_folio_original').focus();
+                        return;
+                    }
+                    formData.append('folio_original', original);
+                }
+                if (estadoElegido === 'F' && descripcion.length < 10) {
+                    mostrarToast('Explica por qué no requiere atención (mínimo 10 caracteres)', 'error');
+                    document.getElementById('seguimiento_descripcion').focus();
+                    return;
+                }
+                if (descripcion) {
+                    formData.append('descripcion', descripcion);
+                }
+
+                // Fecha del evento
+                const fechaEvento = document.getElementById('seguimiento_fecha_evento').value;
+                if (fechaEvento) {
+                    // Convertir a formato MySQL datetime (YYYY-MM-DD 00:00:00)
+                    formData.append('fecha_evento', `${fechaEvento} 00:00:00`);
+                }
+                // Si no se proporciona fecha, el backend usará la fecha actual
+
+                const archivos = document.getElementById('seguimiento_archivos').files;
+                for (let i = 0; i < archivos.length; i++) {
+                    formData.append('archivos_seguimiento', archivos[i]);
+                }
+
+                const btnEnviar = document.getElementById('btnEnviarSeguimiento');
+                btnEnviar.disabled = true;
+
+                try {
+                    // Si hay sesión, se envía para registrar quién hizo el movimiento
+                    const token = SMS.token();
+                    const response = await fetch('/api/seguimiento/crear', {
+                        method: 'POST',
+                        headers: token ? { Authorization: 'Bearer ' + token } : {},
+                        body: formData
+                    });
+
+                    const data = await response.json();
+                    console.log('Respuesta completa:', data);
+                    console.log('Folio generado:', data.folio);
+                    console.log('Número secuencial:', data.numero_secuencial);
+                    
+                    if (data.success) {
+                        mostrarToast(`Seguimiento ${data.folio} creado exitosamente`, 'success');
+                        console.log('Folio generado:', data.folio);
+                        cerrarModal();
+                        cargarSeguimientos();
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    mostrarToast('Error: ' + error.message, 'error');
+                } finally {
+                    btnEnviar.disabled = false;
+                }
+            });
+            
+            //EVENT LISTENERS PARA BOTONES DE FILTROS
+            
+            // Pestaña Reportes Notificados
+            const btnFiltrarReportes = document.getElementById('btnFiltrarReportes');
+            const btnLimpiarReportes = document.getElementById('btnLimpiarReportes');
+            const filtroOrden = document.getElementById('filtroOrden');
+            
+            if (btnFiltrarReportes) {
+                btnFiltrarReportes.addEventListener('click', aplicarFiltrosReportes);
+            }
+            if (btnLimpiarReportes) {
+                btnLimpiarReportes.addEventListener('click', limpiarFiltrosReportes);
+            }
+            if (filtroOrden) {
+                filtroOrden.addEventListener('change', function() {
+                    console.log('Ordenamiento reportes cambiado a:', this.value);
+                    cargarReportes();
+                });
+            }
+            
+            // Pestaña Seguimiento de Reportes
+            const btnFiltrarSeguimientos = document.getElementById('btnFiltrarSeguimientos');
+            const btnLimpiarSeguimientos = document.getElementById('btnLimpiarSeguimientos');
+            const filtroSegOrden = document.getElementById('filtro_seg_orden');
+            
+            if (btnFiltrarSeguimientos) {
+                btnFiltrarSeguimientos.addEventListener('click', aplicarFiltrosSeguimientos);
+            }
+            if (btnLimpiarSeguimientos) {
+                btnLimpiarSeguimientos.addEventListener('click', limpiarFiltrosSeguimientos);
+            }
+            if (filtroSegOrden) {
+                filtroSegOrden.addEventListener('change', function() {
+                    console.log('Ordenamiento seguimientos cambiado a:', this.value);
+                    cargarSeguimientos();
+                });
+            }
+            
+            // Pestaña Seguimientos Notificados
+            const btnFiltrarNotificados = document.getElementById('btnFiltrarNotificados');
+            const btnLimpiarNotificados = document.getElementById('btnLimpiarNotificados');
+            const filtroNotifOrden = document.getElementById('filtro_notif_orden');
+            
+            if (btnFiltrarNotificados) {
+                console.log('Botón Filtrar Notificados encontrado');
+                btnFiltrarNotificados.addEventListener('click', function() {
+                    console.log('Click en Filtrar Notificados');
+                    aplicarFiltrosNotificados();
+                });
+            } else {
+                console.debug('Pestaña de notificados deshabilitada: sin btnFiltrarNotificados');
+            }
+            
+            if (btnLimpiarNotificados) {
+                console.log('Botón Limpiar Notificados encontrado');
+                btnLimpiarNotificados.addEventListener('click', function() {
+                    console.log('Click en Limpiar Notificados');
+                    limpiarFiltrosNotificados();
+                });
+            } else {
+                console.debug('Pestaña de notificados deshabilitada: sin btnLimpiarNotificados');
+            }
+            
+            if (filtroNotifOrden) {
+                console.log('Select Orden Notificados encontrado');
+                filtroNotifOrden.addEventListener('change', function() {
+                    console.log('Ordenamiento notificados cambiado a:', this.value);
+                    cargarSeguimientosNotificados();
+                });
+            } else {
+                console.debug('Pestaña de notificados deshabilitada: sin filtroNotifOrden');
+            }
+            
+            console.log('Event listeners configurados');
+            
+            // Cargar seguimientos inicialmente 
+            console.log('Cargando seguimientos iniciales...');
+            setTimeout(() => {
+                console.log('Ejecutando cargarSeguimientos después de 100ms...');
+                cargarSeguimientos();
+            }, 100);
+            console.log('Inicialización completa');
+            
+            // Inicializar pestañas del modal
+            inicializarPestañasModal();
+            
+            // Event listener para el botón de agregar áreas
+            const btnAgregarAreas = document.getElementById('btnAgregarAreas');
+            if (btnAgregarAreas) {
+                btnAgregarAreas.addEventListener('click', agregarAreasAlReporte);
+            }
+        });
+    </script>
+</body>
+</html>

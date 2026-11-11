@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Respaldos · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap sg-wrap--mid">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Control · Continuidad</span>
+                <h1>Respaldos de la base de datos</h1>
+                <p>Copias completas y comprimidas de la información del sistema. Se generan automáticamente cada 24 horas mientras el servidor está encendido.</p>
+            </header>
+            <div id="aviso" class="sg-stack"></div>
+
+            <section class="sg-card" id="zona" hidden>
+                <div class="sg-card__head">
+                    <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-db"/></svg>Respaldos guardados <span class="cuenta" id="cuenta"></span></h2>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnRespaldar"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-save"/></svg>Respaldar ahora</button>
+                </div>
+                <div class="sg-card__body" style="padding:0">
+                    <div class="tabla-resp">
+                        <table class="tabla-comp">
+                            <caption class="sr-only">Respaldos de la base de datos</caption>
+                            <thead><tr><th scope="col">Fecha</th><th scope="col">Archivo</th><th scope="col" class="num">Tamaño</th></tr></thead>
+                            <tbody id="filas"><tr><td colspan="3"><span class="skel"></span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            <p class="sg-help" id="detalle" style="margin-top:12px"></p>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+
+        function tam(b) { return b > 1048576 ? SMS.numero(b / 1048576, 1) + ' MB' : SMS.numero(b / 1024, 0) + ' KB'; }
+
+        async function cargar() {
+            var d = await SMS.api('/api/sistema/respaldos');
+            $('cuenta').textContent = d.respaldos.length ? '(' + d.respaldos.length + ')' : '';
+            var u = d.respaldos[0];
+            var avisos = '';
+            if (!d.mysqldump) avisos += '<div class="sg-banner crit">' + ic('crit') + '<span>No se encontró la herramienta <span class="mono">mysqldump</span>. Indica su ruta en <span class="mono">MYSQLDUMP_PATH</span> dentro del archivo <span class="mono">.env</span>.</span></div>';
+            else if (!d.automatico) avisos += '<div class="sg-banner warn">' + ic('warn') + '<span>El respaldo automático está desactivado (<span class="mono">RESPALDO_AUTOMATICO=0</span>).</span></div>';
+            else if (!u || Date.now() - new Date(u.fecha).getTime() > 26 * 3600000) avisos += '<div class="sg-banner warn">' + ic('warn') + '<span>No hay un respaldo de las últimas 24 horas. Genera uno con <b>Respaldar ahora</b>.</span></div>';
+            else avisos += '<div class="sg-banner">' + ic('ok') + '<span>Último respaldo ' + SMS.relativa(u.fecha) + ' (' + SMS.fechaHora(u.fecha) + ').</span></div>';
+            $('aviso').innerHTML = avisos;
+            $('filas').innerHTML = d.respaldos.length ? d.respaldos.map(function (r) {
+                return '<tr><td>' + SMS.fechaHora(r.fecha) + '<span class="sub">' + SMS.relativa(r.fecha) + '</span></td><td class="mono" style="font-size:12.5px">' + esc(r.archivo) + '</td><td class="num">' + tam(r.bytes) + '</td></tr>';
+            }).join('') : '<tr><td colspan="3"><div class="sg-empty" style="padding:24px">' + ic('db') + '<b>Aún no hay respaldos</b>El primero se genera unos segundos después de iniciar el servidor.</div></td></tr>';
+            $('detalle').innerHTML = 'Se guardan en <span class="mono">' + esc(d.carpeta) + '</span> y se conservan los últimos ' + d.conservar + '. Contienen datos personales: cópialos solo a medios autorizados. Para restaurar uno, consulta la sección “Respaldos” de README_SMS.md.';
+        }
+
+        $('btnRespaldar').addEventListener('click', async function () {
+            var b = this; b.disabled = true;
+            var etq = b.innerHTML;
+            b.innerHTML = '<span class="sg-spinner sg-spinner--sm"></span>Respaldando…';
+            try {
+                var r = await SMS.api('/api/sistema/respaldos', { method: 'POST', json: {} });
+                SAGA.toast('Respaldo creado: ' + r.archivo, 'success');
+                await cargar();
+            } catch (e) { SAGA.toast(e.message, 'error'); }
+            finally { b.disabled = false; b.innerHTML = etq; }
+        });
+
+        SMS.sesion().then(function (s) {
+            if (!s || s.capacidades.indexOf('gestionar_respaldos') < 0) {
+                $('aviso').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span>Solo un administrador puede consultar los respaldos. <a href="/login?volver=/admin/respaldos">Iniciar sesión</a></span></div>';
+                return;
+            }
+            $('zona').hidden = false;
+            cargar().catch(function (e) { $('aviso').innerHTML = '<div class="sg-banner crit">' + ic('crit') + '<span>' + esc(e.message) + '</span></div>'; });
+        });
+    })();
+    </script>
+</body>
+</html>

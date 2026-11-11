@@ -1,0 +1,298 @@
+<%
+    const estadosTexto = {
+        'A': 'Generado',
+        'B': 'Enterado',
+        'C': 'En atención',
+        'D': 'Resuelto',
+        'E': 'Duplicado',
+        'F': 'No requiere atención'
+    };
+    const fmtFecha = (valor, opciones) => new Date(valor).toLocaleDateString('es-MX', opciones);
+-%>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial <%= reporte.folio %> · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <link rel="stylesheet" href="/css/reporte.css">
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ],
+    extra: '<button type="button" class="btn btn-secondary" id="btnImprimir" title="Imprimir"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg><span class="lbl">Imprimir</span></button>'
+}) %>
+
+    <main class="sg-main container">
+        <div class="sg-wrap sg-wrap--mid">
+            <header class="rep-head header">
+                <span class="sg-kicker">Historial de seguimiento</span>
+                <h1>
+                    <span>Reporte <span class="mono folio"><%= reporte.folio %></span></span>
+                    <span class="estado-badge estado-<%= reporte.estado %>"><%= reporte.estado %> · <%= estadosTexto[reporte.estado] || reporte.estado %></span>
+                </h1>
+                <div class="rep-meta fecha-hora">
+                    <span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-calendar"/></svg>
+                        <%= fmtFecha(reporte.fecha, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+                    </span>
+                    <% if (reporte.hora) { %>
+                    <span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-clock"/></svg>
+                        <%= String(reporte.hora).substring(0, 5) %> h
+                    </span>
+                    <% } %>
+                    <span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-activity"/></svg>
+                        <%= seguimientos ? seguimientos.length : 0 %> <%= seguimientos && seguimientos.length === 1 ? 'movimiento' : 'movimientos' %>
+                    </span>
+                </div>
+            </header>
+
+            <div class="rep-layout content">
+                <div class="rep-main">
+                    <!-- Descripción -->
+                    <section class="sg-card section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>
+                                Descripción del hallazgo
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="texto-largo descripcion-box"><%= reporte.descripcion %></div>
+                        </div>
+                    </section>
+
+                    <!-- Ubicación -->
+                    <section class="sg-card section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pin"/></svg>
+                                Ubicación
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="texto-largo"><%= reporte.lugar %></div>
+
+                            <% if (ubicacion && ubicacion.latitud && ubicacion.longitud) { %>
+                            <div class="gps-box ubicacion-box">
+                                <dl class="gps-coords">
+                                    <div>
+                                        <dt class="dato-etq">Latitud</dt>
+                                        <dd><%= ubicacion.latitud %></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="dato-etq">Longitud</dt>
+                                        <dd><%= ubicacion.longitud %></dd>
+                                    </div>
+                                    <% if (ubicacion.precision_metros) { %>
+                                    <div>
+                                        <dt class="dato-etq">Precisión</dt>
+                                        <dd>± <%= Math.round(ubicacion.precision_metros) %> m</dd>
+                                    </div>
+                                    <% } %>
+                                </dl>
+                                <a href="https://maps.google.com/?q=<%= ubicacion.latitud %>,<%= ubicacion.longitud %>"
+                                   target="_blank" rel="noopener" class="btn btn-secondary btn-sm mapa-btn">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-map"/></svg>
+                                    Ver en Google Maps
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-external"/></svg>
+                                </a>
+                            </div>
+                            <% } %>
+                        </div>
+                    </section>
+
+                    <!-- Evidencia del reporte -->
+                    <% if (archivos && archivos.length > 0) { %>
+                    <section class="sg-card section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-image"/></svg>
+                                Evidencia gráfica
+                                <span class="cuenta">(<%= archivos.length %>)</span>
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="galeria media-gallery">
+                                <% archivos.forEach((archivo, index) => { %>
+                                <a href="/uploads/<%= archivo.ruta_optimizada || archivo.ruta_original %>" target="_blank" rel="noopener" class="media-item-link" aria-label="Ver imagen <%= index + 1 %> completa">
+                                    <img src="/uploads/<%= archivo.ruta_thumbnail || archivo.ruta_optimizada %>"
+                                         alt="Evidencia <%= index + 1 %> del reporte <%= reporte.folio %>"
+                                         loading="lazy"
+                                         onerror="if(!this.dataset.r){this.dataset.r=1;this.src='/uploads/<%= archivo.ruta_original %>';}else{this.onerror=null;this.parentNode.classList.add('rota');}">
+                                    <span class="zoom" aria-hidden="true">
+                                        <svg class="ic"><use href="/img/icons.svg#i-zoom-in"/></svg>
+                                        Ver completa
+                                    </span>
+                                    <span class="num"><%= index + 1 %></span>
+                                </a>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </section>
+                    <% } %>
+
+                    <!-- Historial de seguimiento -->
+                    <section class="sg-card sg-card--feat section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>
+                                Seguimiento por áreas
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <% if (seguimientos && seguimientos.length > 0) { %>
+                            <ol class="timeline">
+                                <% seguimientos.forEach(seg => { %>
+                                <li class="timeline-item">
+                                    <span class="timeline-icon estado-<%= seg.estado %>" aria-hidden="true"><%= seg.estado %></span>
+
+                                    <div class="timeline-content">
+                                        <div class="timeline-header">
+                                            <div class="timeline-dept">
+                                                <span><%= seg.departamento_nombre || (seg.estado === 'A' ? 'Registro del reporte' : 'Área no especificada') %></span>
+                                                <span class="sg-folio folio-seguimiento"><%= seg.folio_seguimiento %></span>
+                                            </div>
+                                            <div class="timeline-date">
+                                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-calendar"/></svg>
+                                                <%= fmtFecha(seg.fecha_evento || seg.fecha, { year: 'numeric', month: 'long', day: 'numeric' }) %>
+                                            </div>
+                                        </div>
+
+                                        <div class="timeline-estado">
+                                            <span class="estado-badge estado-<%= seg.estado %>">
+                                                <%= seg.estado %> · <%= estadosTexto[seg.estado] || seg.estado %>
+                                            </span>
+                                            <% if (seg.numero_secuencial_estado && seg.numero_secuencial_estado > 1) { %>
+                                            <span class="sg-chip">#<%= seg.numero_secuencial_estado %> en este estatus</span>
+                                            <% } %>
+                                        </div>
+
+                                        <% if (seg.descripcion) { %>
+                                        <div class="timeline-body"><%= seg.descripcion %></div>
+                                        <% } else { %>
+                                        <div class="timeline-body pendiente">Reporte generado · pendiente de revisión</div>
+                                        <% } %>
+
+                                        <% if (seg.imagenes && seg.imagenes.length > 0) { %>
+                                        <div class="timeline-evidencia">
+                                            <div class="dato-etq">
+                                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-camera"/></svg>
+                                                Evidencia del seguimiento (<%= seg.imagenes.length %>)
+                                            </div>
+                                            <div class="galeria galeria--sm seguimiento-galeria">
+                                                <% seg.imagenes.forEach((img, index) => { %>
+                                                <a href="<%= img.url_optimizada %>" target="_blank" rel="noopener" class="seguimiento-imagen-link" aria-label="Ver imagen <%= index + 1 %> del seguimiento">
+                                                    <img src="<%= img.url_thumbnail %>"
+                                                         alt="Imagen <%= index + 1 %> del seguimiento <%= seg.folio_seguimiento %>"
+                                                         loading="lazy"
+                                                         onerror="if(!this.dataset.r){this.dataset.r=1;this.src='<%= img.url_original %>';}else{this.onerror=null;this.parentNode.classList.add('rota');}">
+                                                    <span class="zoom" aria-hidden="true">
+                                                        <svg class="ic"><use href="/img/icons.svg#i-zoom-in"/></svg>
+                                                    </span>
+                                                </a>
+                                                <% }) %>
+                                            </div>
+                                        </div>
+                                        <% } %>
+                                    </div>
+                                </li>
+                                <% }) %>
+                            </ol>
+                            <% } else { %>
+                            <div class="sg-empty empty-timeline">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-inbox"/></svg>
+                                <b>Sin seguimientos</b>
+                                Aún no hay seguimientos registrados para este reporte.
+                            </div>
+                            <% } %>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Ficha lateral -->
+                <aside class="rep-aside">
+                    <section class="sg-card">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-checklist"/></svg>
+                                Datos del reporte
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <dl class="ficha info-grid" id="fichaDatos">
+                                <div>
+                                    <dt>Categoría del hallazgo</dt>
+                                    <dd><%= reporte.tipo_problema %></dd>
+                                </div>
+                                <div>
+                                    <dt>Áreas notificadas</dt>
+                                    <dd>
+                                        <% if (departamentosResponsables && departamentosResponsables.length > 0) { %>
+                                        <ul class="lista-areas">
+                                            <% departamentosResponsables.forEach(dept => { %>
+                                            <li><%= dept.nombre %></li>
+                                            <% }) %>
+                                        </ul>
+                                        <% } else { %>
+                                        <span class="nd">Sin área asignada</span>
+                                        <% } %>
+                                    </dd>
+                                </div>
+                                <!-- Datos de quien reportó: solo con sesión (se agregan desde el navegador) -->
+                            </dl>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+        // Animación de entrada de la línea de tiempo
+        document.addEventListener('DOMContentLoaded', function() {
+            const items = document.querySelectorAll('.timeline-item');
+            items.forEach((item, index) => {
+                item.style.opacity = '0';
+                item.style.transform = 'translateY(12px)';
+                item.style.transition = 'opacity .4s ease, transform .4s ease';
+
+                setTimeout(() => {
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateY(0)';
+                }, 80 + index * 80);
+            });
+        });
+
+        document.getElementById('btnImprimir').addEventListener('click', function() {
+            window.print();
+        });
+
+        // Datos de quien reportó: solo para personal con sesión
+        (function () {
+            var folio = <%- JSON.stringify(String(reporte.folio)).replace(/</g, '\\u003c') %>;
+            SMS.sesion().then(function (s) {
+                if (!s || s.capacidades.indexOf('ver_interno') < 0) return null;
+                return SMS.api('/api/sms/reportes/' + encodeURIComponent(folio) + '/reportante');
+            }).then(function (d) {
+                if (d) SMS.pintarReportante(document.getElementById('fichaDatos'), d.reportante);
+            }).catch(function () { /* sin permiso o sin conexión: no se muestran */ });
+        })();
+
+        function volverADashboard() {
+            if (window.opener && !window.opener.closed) {
+                window.opener.focus();
+            } else {
+                window.history.back();
+            }
+        }
+    </script>
+</body>
+</html>

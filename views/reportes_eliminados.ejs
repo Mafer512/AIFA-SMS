@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes eliminados · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .lista-elim { list-style: none; margin: 0; padding: 0; }
+        .elim { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 16px 20px; border-bottom: 1px solid var(--n100); }
+        .elim:last-child { border-bottom: 0; }
+        .elim.is-restaurado { background: var(--n50); }
+        .elim__t { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .elim__t b { font-size: 14.5px; color: var(--n900); }
+        .elim p { font-size: 13px; color: var(--n700); margin-top: 4px; overflow-wrap: anywhere; }
+        .elim .meta { font-size: 12px; color: var(--n500); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+        .elim .acc { display: flex; align-items: flex-start; }
+        @media (max-width: 600px) { .elim { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap sg-wrap--mid">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Control · SMS</span>
+                <h1>Reportes eliminados</h1>
+                <p>Copia completa de cada reporte eliminado (seguimientos, evidencias, acciones, riesgo y compromisos). Un administrador puede restaurarlo tal como estaba; el folio nunca se reasigna.</p>
+            </header>
+
+            <div id="aviso"></div>
+
+            <section class="sg-card" id="zona" hidden>
+                <div class="sg-card__head">
+                    <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trash"/></svg>Archivo <span class="cuenta" id="cuenta"></span></h2>
+                    <a class="btn btn-ghost btn-sm" href="/admin/auditoria"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>Bitácora</a>
+                </div>
+                <ul class="lista-elim" id="lista"><li style="padding:20px"><span class="skel"></span><span class="skel skel--media"></span></li></ul>
+            </section>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var datos = [];
+
+        function contenido(r) {
+            var partes = Object.keys(r.resumen || {}).map(function (k) { return r.resumen[k].nombre.toLowerCase() + ': ' + r.resumen[k].n; });
+            return partes.length ? partes.join(' · ') : 'sin registros asociados';
+        }
+
+        function pintar() {
+            $('cuenta').textContent = datos.length ? '(' + datos.length + ')' : '';
+            $('lista').innerHTML = datos.length ? datos.map(function (r) {
+                var rest = !!r.restaurado_en;
+                return '<li class="elim' + (rest ? ' is-restaurado' : '') + '">' +
+                    '<div><div class="elim__t"><span class="sg-folio">' + esc(r.folio) + '</span><b>' + esc(r.tipo_problema || '') + '</b>' +
+                    (r.estado ? SMS.estado(r.estado) : '') +
+                    (rest ? '<span class="sg-chip">' + ic('refresh') + 'Restaurado</span>' : '') + '</div>' +
+                    '<p><strong>Motivo:</strong> ' + esc(r.motivo) + '</p>' +
+                    '<div class="meta"><span>Reporte del ' + SMS.fecha(r.fecha_reporte) + '</span>' +
+                    '<span>Eliminado ' + SMS.fechaHora(r.eliminado_en) + (r.eliminado_por_nombre ? ' por ' + esc(r.eliminado_por_nombre) : '') + '</span>' +
+                    (rest ? '<span>Restaurado ' + SMS.fechaHora(r.restaurado_en) + (r.restaurado_por_nombre ? ' por ' + esc(r.restaurado_por_nombre) : '') + '</span>' : '') +
+                    '<span>Copia: ' + esc(contenido(r)) + '</span></div></div>' +
+                    '<div class="acc">' + (rest
+                        ? '<a class="btn btn-secondary btn-sm" href="/reportes/' + encodeURIComponent(r.folio) + '">' + ic('doc') + 'Ver reporte</a>'
+                        : '<button type="button" class="btn btn-secondary btn-sm" data-restaurar="' + r.id + '">' + ic('refresh') + 'Restaurar</button>') + '</div>' +
+                    '</li>';
+            }).join('') : '<li><div class="sg-empty" style="padding:32px 16px">' + ic('inbox') + '<b>No hay reportes eliminados</b>Cuando un administrador elimine un reporte, su copia aparecerá aquí.</div></li>';
+        }
+
+        async function cargar() {
+            try { datos = (await SMS.api('/api/sms/eliminados')).eliminados; pintar(); }
+            catch (e) { $('lista').innerHTML = '<li><div class="sg-empty crit">' + ic('crit') + '<b>No se pudo cargar el archivo</b>' + esc(e.message) + '</div></li>'; }
+        }
+
+        $('lista').addEventListener('click', async function (e) {
+            var b = e.target.closest('[data-restaurar]');
+            if (!b) return;
+            var r = datos.find(function (x) { return x.id === +b.dataset.restaurar; });
+            if (!confirm('¿Restaurar el reporte ' + r.folio + ' con todos sus registros? Volverá a aparecer en listados, indicadores y paneles de área.')) return;
+            b.disabled = true;
+            try {
+                await SMS.api('/api/sms/eliminados/' + r.id + '/restaurar', { method: 'POST', json: {} });
+                SAGA.toast('Reporte ' + r.folio + ' restaurado', 'success');
+                await cargar();
+            } catch (er) { SAGA.toast(er.message, 'error'); b.disabled = false; }
+        });
+
+        SMS.sesion().then(function (u) {
+            if (!u || u.capacidades.indexOf('eliminar_reporte') < 0) {
+                $('aviso').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span>Solo un administrador puede consultar y restaurar reportes eliminados. <a href="/login?volver=/admin/eliminados">Iniciar sesión</a></span></div>';
+                return;
+            }
+            $('zona').hidden = false;
+            cargar();
+        });
+    })();
+    </script>
+</body>
+</html>

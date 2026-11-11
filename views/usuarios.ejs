@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios y permisos · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .barra-u { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+        .barra-u .sg-field { min-width: 160px; }
+        .barra-u .sg-field:first-child { flex: 1 1 260px; }
+        .barra-u .btn-primary { margin-left: auto; }
+        .roles-g { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+        .rol-c { padding: 12px 14px; border: 1px solid var(--n100); border-radius: 10px; background: var(--sf); }
+        .rol-c b { display: block; font-size: 13.5px; color: var(--n900); }
+        .rol-c span { display: block; font-size: 12.5px; color: var(--n600); margin-top: 2px; }
+        .rol-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 4px; font: 600 12px/1 var(--fx); background: var(--n100); color: var(--n700); white-space: nowrap; }
+        .rol-chip--admin { background: var(--v100); color: var(--v800); }
+        .rol-chip--supervisor { background: var(--az-f); color: var(--az-t); }
+        .rol-chip--editor { background: var(--amb-f); color: var(--amb-t); }
+        .u-nombre b { display: block; color: var(--n900); font-weight: 600; }
+        .u-nombre .sub { display: block; font-size: 12px; color: var(--n500); }
+        .estado-u { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+        .estado-u::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v600); }
+        .estado-u--inactivo { color: var(--n500); } .estado-u--inactivo::before { background: var(--n300); }
+        .estado-u--bloqueado { color: var(--r600); } .estado-u--bloqueado::before { background: var(--r600); }
+        tr.is-inactivo td { color: var(--n500); }
+        .acc-u { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+        .opc-rol { display: grid; gap: 8px; }
+        .opc-rol label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--n200); border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+        .opc-rol label:has(input:checked) { border-color: var(--v600); background: var(--v50); }
+        .opc-rol label small { display: block; color: var(--n600); font-size: 12.5px; }
+        .opc-rol input { margin-top: 3px; }
+        .form-u { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+        .form-u .ancho { grid-column: 1 / -1; }
+        @media (max-width: 560px) { .form-u { grid-template-columns: 1fr; } }
+        .pass-caja { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 8px; background: var(--n50); border: 1px solid var(--n200); font: 600 18px var(--fm); letter-spacing: .04em; color: var(--n900); word-break: break-all; }
+        .pass-caja .btn { margin-left: auto; flex: none; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Control · Accesos</span>
+                <h1>Usuarios y permisos</h1>
+                <p>Alta de cuentas, rol, área y estado de acceso. Los usuarios no se eliminan: se desactivan para conservar el historial de lo que registraron. Cada cambio queda en la bitácora.</p>
+            </header>
+
+            <div id="aviso"></div>
+
+            <div id="zona" hidden>
+                <section class="sg-card" style="margin-bottom:20px">
+                    <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>Qué puede hacer cada rol</h2></div>
+                    <div class="sg-card__body"><div class="roles-g" id="roles"></div></div>
+                </section>
+
+                <div class="barra-u">
+                    <div class="sg-field">
+                        <label for="fBuscar">Buscar</label>
+                        <div class="campo-ic"><input type="search" id="fBuscar" placeholder="Nombre, usuario, correo o área" autocomplete="off"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg></div>
+                    </div>
+                    <div class="sg-field"><label for="fRol">Rol</label><select id="fRol"><option value="">Todos</option></select></div>
+                    <div class="sg-field"><label for="fEstado">Estado</label>
+                        <select id="fEstado"><option value="activos">Activos</option><option value="inactivos">Inactivos</option><option value="">Todos</option></select></div>
+                    <button type="button" class="btn btn-primary" id="btnNuevo"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Nuevo usuario</button>
+                </div>
+
+                <div class="sg-table-wrap">
+                    <table class="sg-table">
+                        <caption class="sr-only">Usuarios del sistema</caption>
+                        <thead><tr><th scope="col">Usuario</th><th scope="col">Rol</th><th scope="col">Área</th><th scope="col">Estado</th><th scope="col">Último acceso</th><th scope="col"><span class="sr-only">Acciones</span></th></tr></thead>
+                        <tbody id="filas"><tr><td colspan="6"><span class="skel"></span><span class="skel skel--media"></span></td></tr></tbody>
+                    </table>
+                </div>
+                <p class="contador" id="contador" style="margin-top:10px"></p>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var datos = null;
+
+        function sugerir(nombre, apellidos) {
+            var p = (nombre + ' ' + (apellidos || '')).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+            return p.length > 1 ? p[0] + '.' + p[1] : (p[0] || '');
+        }
+        function estadoU(u) {
+            if (!u.activo) return '<span class="estado-u estado-u--inactivo">Inactivo</span>';
+            if (u.bloqueado) return '<span class="estado-u estado-u--bloqueado" data-tip="Bloqueado por intentos fallidos hasta ' + esc(SMS.fechaHora(u.bloqueado_hasta)) + '" tabindex="0">Bloqueado</span>';
+            return '<span class="estado-u">Activo</span>' + (u.debe_cambiar_password ? '<span class="sub">Contraseña temporal</span>' : '');
+        }
+
+        function pintar() {
+            var q = $('fBuscar').value.trim().toLowerCase(), rol = $('fRol').value, est = $('fEstado').value;
+            var lista = datos.usuarios.filter(function (u) {
+                if (rol && u.rol !== rol) return false;
+                if (est === 'activos' && !u.activo) return false;
+                if (est === 'inactivos' && u.activo) return false;
+                if (q && [u.nombre, u.apellidos, u.username, u.email, u.departamento].join(' ').toLowerCase().indexOf(q) < 0) return false;
+                return true;
+            });
+            $('contador').textContent = lista.length + ' de ' + datos.usuarios.length + ' cuenta(s) · ' + datos.usuarios.filter(function (u) { return u.activo && u.rol === 'admin'; }).length + ' administrador(es) activo(s)';
+            $('filas').innerHTML = lista.length ? lista.map(function (u) {
+                var yo = u.id === datos.yo;
+                var nombre = [u.nombre, u.apellidos].filter(Boolean).join(' ');
+                return '<tr class="' + (u.activo ? '' : 'is-inactivo') + '">' +
+                    '<td class="u-nombre"><b>' + esc(nombre) + (yo ? ' <span class="sg-chip">Tú</span>' : '') + '</b><span class="sub mono">' + esc(u.username) + '</span><span class="sub">' + esc(u.email) + '</span></td>' +
+                    '<td><span class="rol-chip rol-chip--' + esc(u.rol) + '">' + esc((datos.roles[u.rol] || {}).nombre || u.rol) + '</span></td>' +
+                    '<td>' + esc(u.departamento || '—') + (u.cargo ? '<span class="sub">' + esc(u.cargo) + '</span>' : '') + '</td>' +
+                    '<td>' + estadoU(u) + '</td>' +
+                    '<td>' + (u.ultimo_login ? SMS.fechaHora(u.ultimo_login) + '<span class="sub">' + SMS.relativa(u.ultimo_login) + '</span>' : '<span class="nd">Nunca</span>') + '</td>' +
+                    '<td><div class="acc-u">' +
+                    '<button type="button" class="btn btn-secondary btn-sm btn-icon" data-editar="' + u.id + '" data-tip="Editar datos, rol y área" aria-label="Editar a ' + esc(u.username) + '">' + ic('edit') + '</button>' +
+                    '<button type="button" class="btn btn-secondary btn-sm btn-icon" data-pass="' + u.id + '" data-tip="Restablecer contraseña" aria-label="Restablecer contraseña de ' + esc(u.username) + '">' + ic('key') + '</button>' +
+                    (u.bloqueado ? '<button type="button" class="btn btn-secondary btn-sm btn-icon" data-desbloquear="' + u.id + '" data-tip="Desbloquear" aria-label="Desbloquear a ' + esc(u.username) + '">' + ic('lock') + '</button>' : '') +
+                    (yo ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-activo="' + u.id + '">' + (u.activo ? ic('ban') + 'Desactivar' : ic('refresh') + 'Reactivar') + '</button>') +
+                    '</div></td></tr>';
+            }).join('') : '<tr><td colspan="6"><div class="sg-empty">' + ic('users') + '<b>Sin usuarios con estos criterios</b></div></td></tr>';
+        }
+
+        async function cargar() {
+            datos = await SMS.api('/api/usuarios');
+            if (!$('fRol').dataset.listo) {
+                $('fRol').innerHTML = '<option value="">Todos</option>' + Object.keys(datos.roles).map(function (k) { return '<option value="' + k + '">' + esc(datos.roles[k].nombre) + '</option>'; }).join('');
+                $('fRol').dataset.listo = '1';
+                $('roles').innerHTML = Object.keys(datos.roles).map(function (k) { return '<div class="rol-c"><span class="rol-chip rol-chip--' + k + '">' + esc(datos.roles[k].nombre) + '</span><span style="margin-top:6px">' + esc(datos.roles[k].descripcion) + '</span></div>'; }).join('');
+            }
+            pintar();
+        }
+
+        function mostrarPassword(titulo, usuario, password) {
+            return SMS.dialogo({
+                titulo: titulo, eyebrow: 'Cópiala ahora', boton: 'Listo', icono: 'check', soloAceptar: true,
+                html: '<p style="font-size:14px;color:var(--n700);margin-bottom:10px">Contraseña temporal para <strong class="mono">' + esc(usuario) + '</strong>. Se muestra <strong>una sola vez</strong>; entrégala de forma segura. Al entrar, el sistema le pedirá cambiarla.</p>' +
+                    '<div class="pass-caja"><span id="passTxt">' + esc(password) + '</span><button type="button" class="btn btn-secondary btn-sm" id="btnCopiar">' + ic('copy') + 'Copiar</button></div>',
+                alAbrir: function (f) {
+                    f.querySelector('#btnCopiar').addEventListener('click', function () {
+                        navigator.clipboard.writeText(password).then(function () { SAGA.toast('Contraseña copiada', 'success', { duracion: 2000 }); }, function () { SAGA.toast('Selecciónala y cópiala manualmente', 'warning'); });
+                    });
+                }
+            });
+        }
+
+        function formulario(u) {
+            var nuevo = !u;
+            var opcArea = datos.departamentos.map(function (d) { return '<option value="' + d.id + '"' + (u && u.id_departamento === d.id ? ' selected' : '') + '>' + esc(d.nombre) + (d.activo ? '' : ' (inactiva)') + '</option>'; }).join('');
+            var yo = u && u.id === datos.yo;
+            var opcRol = Object.keys(datos.roles).map(function (k) {
+                return '<label><input type="radio" name="rol" value="' + k + '"' + ((u ? u.rol : 'editor') === k ? ' checked' : '') + (yo ? ' disabled' : '') + '><span><b>' + esc(datos.roles[k].nombre) + '</b><small>' + esc(datos.roles[k].descripcion) + '</small></span></label>';
+            }).join('');
+            return SMS.dialogo({
+                titulo: nuevo ? 'Nuevo usuario' : 'Editar a ' + u.username, eyebrow: 'Usuarios y permisos', ancho: true,
+                boton: nuevo ? 'Crear usuario' : 'Guardar cambios', icono: 'save',
+                html: '<div class="form-u">' +
+                    '<div class="sg-field"><label for="uNombre">Nombre <span class="req">*</span></label><input id="uNombre" name="nombre" maxlength="150" value="' + esc(u ? u.nombre : '') + '"></div>' +
+                    '<div class="sg-field"><label for="uApellidos">Apellidos</label><input id="uApellidos" name="apellidos" maxlength="200" value="' + esc(u ? u.apellidos || '' : '') + '"></div>' +
+                    '<div class="sg-field"><label for="uUsuario">Usuario para entrar' + (nuevo ? ' <span class="req">*</span>' : '') + '</label><input id="uUsuario" name="username" maxlength="60" spellcheck="false" autocomplete="off" value="' + esc(u ? u.username : '') + '"' + (nuevo ? '' : ' disabled') + '>' +
+                    '<span class="sg-help">' + (nuevo ? 'Sin espacios; se sugiere a partir del nombre.' : 'El usuario no se cambia, para conservar la trazabilidad.') + '</span></div>' +
+                    '<div class="sg-field"><label for="uCorreo">Correo <span class="req">*</span></label><input type="email" id="uCorreo" name="email" maxlength="255" value="' + esc(u ? u.email : '') + '"></div>' +
+                    '<div class="sg-field"><label for="uArea">Área <span class="req">*</span></label><select id="uArea" name="id_departamento">' + opcArea + '</select></div>' +
+                    '<div class="sg-field"><label for="uCargo">Cargo</label><input id="uCargo" name="cargo" maxlength="100" value="' + esc(u ? u.cargo || '' : '') + '"></div>' +
+                    '<div class="sg-field ancho"><span class="sg-label" style="font-weight:600;font-size:13.5px">Rol' + (yo ? ' <small class="sg-help">(no puedes cambiar tu propio rol)</small>' : '') + '</span><div class="opc-rol" style="margin-top:6px">' + opcRol + '</div></div>' +
+                    (nuevo ? '<div class="sg-field ancho"><span style="font-weight:600;font-size:13.5px">Contraseña inicial</span>' +
+                        '<div class="opc-rol" style="margin-top:6px"><label><input type="radio" name="modo" value="generar" checked><span><b>Generar una contraseña segura</b><small>Se muestra una sola vez al crear la cuenta.</small></span></label>' +
+                        '<label><input type="radio" name="modo" value="escribir"><span><b>Escribirla</b><small>Al menos 10 caracteres, con letras y números.</small></span></label></div>' +
+                        '<input type="password" id="uPass" name="password" maxlength="128" autocomplete="new-password" placeholder="Contraseña" style="margin-top:8px" hidden></div>' : '') +
+                    '</div>',
+                alAbrir: function (f) {
+                    if (!nuevo) return;
+                    var editado = false;
+                    var s = function () { if (!editado) f.querySelector('#uUsuario').value = sugerir(f.querySelector('#uNombre').value, f.querySelector('#uApellidos').value); };
+                    f.querySelector('#uNombre').addEventListener('input', s);
+                    f.querySelector('#uApellidos').addEventListener('input', s);
+                    f.querySelector('#uUsuario').addEventListener('input', function () { editado = this.value.trim() !== ''; });
+                    f.querySelectorAll('[name=modo]').forEach(function (r) { r.addEventListener('change', function () { f.querySelector('#uPass').hidden = f.querySelector('[name=modo]:checked').value !== 'escribir'; }); });
+                    var sms = datos.departamentos.find(function (d) { return /sms|seguridad operacional/i.test(d.codigo + ' ' + d.nombre) && d.activo; });
+                    if (sms) f.querySelector('#uArea').value = sms.id;
+                },
+                enviar: async function (f) {
+                    var g = function (n) { var e = f.querySelector('[name=' + n + ']'); return e ? e.value.trim() : ''; };
+                    var cuerpo = { nombre: g('nombre'), apellidos: g('apellidos'), email: g('email'), id_departamento: g('id_departamento'), cargo: g('cargo') };
+                    if (!yo) cuerpo.rol = (f.querySelector('[name=rol]:checked') || {}).value;
+                    if (nuevo) {
+                        cuerpo.username = g('username');
+                        if (f.querySelector('[name=modo]:checked').value === 'escribir') cuerpo.password = f.querySelector('#uPass').value;
+                        var d = await SMS.api('/api/usuarios', { method: 'POST', json: cuerpo });
+                        return d;
+                    }
+                    return SMS.api('/api/usuarios/' + u.id, { method: 'PATCH', json: cuerpo });
+                }
+            });
+        }
+
+        $('btnNuevo').addEventListener('click', function () {
+            formulario(null).then(function (d) {
+                if (!d) return;
+                cargar();
+                if (d.password) mostrarPassword('Usuario creado', d.username, d.password);
+                else SAGA.toast('Usuario ' + d.username + ' creado', 'success');
+            });
+        });
+        ['fBuscar', 'fRol', 'fEstado'].forEach(function (id) { $(id).addEventListener(id === 'fBuscar' ? 'input' : 'change', pintar); });
+        $('filas').addEventListener('click', async function (e) {
+            var b = e.target.closest('button');
+            if (!b) return;
+            var id = +(b.dataset.editar || b.dataset.pass || b.dataset.desbloquear || b.dataset.activo);
+            var u = datos.usuarios.find(function (x) { return x.id === id; });
+            if (!u) return;
+            try {
+                if (b.dataset.editar) {
+                    if (await formulario(u)) { SAGA.toast('Cambios guardados', 'success'); cargar(); }
+                } else if (b.dataset.pass) {
+                    if (!confirm('¿Generar una contraseña nueva para ' + u.username + '? La actual dejará de funcionar.')) return;
+                    var r = await SMS.api('/api/usuarios/' + id + '/restablecer', { method: 'POST', json: {} });
+                    cargar();
+                    mostrarPassword('Contraseña restablecida', u.username, r.password);
+                } else if (b.dataset.desbloquear) {
+                    await SMS.api('/api/usuarios/' + id + '/desbloquear', { method: 'POST', json: {} });
+                    SAGA.toast('Usuario desbloqueado', 'success'); cargar();
+                } else if (b.dataset.activo) {
+                    if (!confirm(u.activo ? '¿Desactivar a ' + u.username + '? No podrá iniciar sesión; su historial se conserva.' : '¿Reactivar a ' + u.username + '?')) return;
+                    await SMS.api('/api/usuarios/' + id, { method: 'PATCH', json: { activo: !u.activo } });
+                    SAGA.toast(u.activo ? 'Usuario desactivado' : 'Usuario reactivado', 'success'); cargar();
+                }
+            } catch (er) { SAGA.toast(er.message, 'error'); }
+        });
+
+        SMS.sesion().then(function (s) {
+            if (!s || s.capacidades.indexOf('gestionar_usuarios') < 0) {
+                $('aviso').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span>Solo un administrador puede gestionar usuarios. <a href="/login?volver=/admin/usuarios">Iniciar sesión</a></span></div>';
+                return;
+            }
+            $('zona').hidden = false;
+            cargar().catch(function (e) { $('filas').innerHTML = '<tr><td colspan="6"><div class="sg-empty crit">' + ic('crit') + '<b>No se pudo cargar</b>' + esc(e.message) + '</div></td></tr>'; });
+        });
+    })();
+    </script>
+</body>
+</html>

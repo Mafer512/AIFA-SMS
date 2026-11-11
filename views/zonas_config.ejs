@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zonas del aeropuerto · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .config-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 1100px) { .config-grid { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; } }
+        .interruptor { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; }
+        .interruptor input { width: 18px; height: 18px; margin-top: 2px; }
+        .form-zona { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+        .form-zona .ancho { grid-column: 1 / -1; }
+        @media (max-width: 520px) { .form-zona { grid-template-columns: 1fr; } }
+        tr.inactiva td { color: var(--n500); }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Configuración · SMS · Módulo opcional</span>
+                <h1>Zonas autorizadas del aeropuerto</h1>
+                <p>Catálogo de zonas para ubicar los hallazgos con criterios uniformes (plataforma, pista, calles de rodaje…). Con el módulo activo, el personal autorizado asigna la zona en el detalle de cada reporte y el análisis agrupa las recurrencias por zona.</p>
+            </header>
+
+            <div id="avisos" class="sg-stack"></div>
+
+            <div class="config-grid" id="contenido" style="margin-top:20px" hidden>
+                <section class="sg-card">
+                    <div class="sg-card__head">
+                        <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-map"/></svg>Zonas <span class="cuenta" id="cuenta"></span></h2>
+                    </div>
+                    <div class="sg-card__body" style="padding:0">
+                        <div class="tabla-resp">
+                            <table class="tabla-comp">
+                                <caption class="sr-only">Zonas autorizadas</caption>
+                                <thead><tr><th scope="col">Código</th><th scope="col">Nombre</th><th scope="col">Tipo</th><th scope="col" class="num">Reportes</th><th scope="col">Estado</th><th scope="col"><span class="sr-only">Acciones</span></th></tr></thead>
+                                <tbody id="filas"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="sg-stack">
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-settings"/></svg>Módulo</h2></div>
+                        <div class="sg-card__body">
+                            <label class="interruptor">
+                                <input type="checkbox" id="habilitado">
+                                <span><strong>Usar zonas en los reportes</strong><br><span class="sg-help">Muestra el filtro por zona, la asignación en el detalle y las recurrencias por zona. Apagado no se pierde información.</span></span>
+                            </label>
+                        </div>
+                    </section>
+                    <section class="sg-card" id="tarjetaForm">
+                        <div class="sg-card__head"><h2 class="sg-card__title" id="tituloForm"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Agregar zona</h2></div>
+                        <div class="sg-card__body">
+                            <form id="formZona" class="form-zona" novalidate>
+                                <input type="hidden" name="id">
+                                <div class="sg-field"><label for="zCodigo">Código <span class="req">*</span></label><input id="zCodigo" name="codigo" maxlength="30" required placeholder="Ej. PLAT-500" autocomplete="off"></div>
+                                <div class="sg-field"><label for="zTipo">Tipo</label><select id="zTipo" name="tipo"><option value="">Sin tipo</option></select></div>
+                                <div class="sg-field ancho"><label for="zNombre">Nombre <span class="req">*</span></label><input id="zNombre" name="nombre" maxlength="120" required placeholder="Nombre oficial de la zona"></div>
+                                <div class="sg-field ancho"><label for="zDesc">Descripción</label><input id="zDesc" name="descripcion" maxlength="300"></div>
+                                <div class="sg-field"><label for="zOrden">Orden</label><input type="number" id="zOrden" name="orden" min="0" max="9999" value="100"></div>
+                                <div class="sg-field" style="justify-content:flex-end"><label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" name="activo" checked> Activa</label></div>
+                                <div class="ancho" style="display:flex;gap:8px;justify-content:flex-end">
+                                    <button type="button" class="btn btn-secondary" id="btnCancelar" hidden>Cancelar</button>
+                                    <button type="submit" class="btn btn-primary"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-save"/></svg><span id="lblGuardar">Agregar zona</span></button>
+                                </div>
+                            </form>
+                            <p class="sg-help" style="margin-top:10px">Captura solo zonas autorizadas por la administración aeroportuaria. Las zonas no se eliminan: se desactivan para conservar el historial de los reportes.</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var datos = null, editable = false;
+        var form = $('formZona');
+
+        function pintar() {
+            var html = '';
+            if (!editable) html += '<div class="sg-banner info">' + ic('lock') + '<span>Vista de consulta. Solo un administrador puede configurar las zonas. <a href="/login?volver=/admin/zonas">Iniciar sesión</a></span></div>';
+            html += datos.habilitado
+                ? '<div class="sg-banner">' + ic('ok') + '<span>El módulo de zonas está <strong>activo</strong>.</span></div>'
+                : '<div class="sg-banner info">' + ic('info') + '<span>El módulo de zonas está <strong>apagado</strong>. Puedes preparar el catálogo y activarlo cuando esté aprobado.</span></div>';
+            $('avisos').innerHTML = html;
+            $('contenido').hidden = false;
+            $('habilitado').checked = datos.habilitado;
+            $('habilitado').disabled = !editable;
+            $('tarjetaForm').hidden = !editable;
+            $('cuenta').textContent = datos.zonas.length ? '(' + datos.zonas.length + ')' : '';
+            $('zTipo').innerHTML = '<option value="">Sin tipo</option>' + datos.tipos.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('');
+            $('filas').innerHTML = datos.zonas.length ? datos.zonas.map(function (z) {
+                return '<tr class="' + (z.activo ? '' : 'inactiva') + '"><td class="mono">' + esc(z.codigo) + '</td><td>' + esc(z.nombre) + (z.descripcion ? '<span class="sub">' + esc(z.descripcion) + '</span>' : '') + '</td>' +
+                    '<td>' + esc(z.tipo || '—') + '</td><td class="num">' + z.reportes + '</td><td>' + (z.activo ? 'Activa' : 'Inactiva') + '</td>' +
+                    '<td class="num">' + (editable ? '<button type="button" class="btn btn-ghost btn-sm" data-editar="' + z.id + '">' + ic('edit') + 'Editar</button>' : '') + '</td></tr>';
+            }).join('') : '<tr><td colspan="6"><div class="sg-empty" style="padding:24px">' + ic('map') + '<b>Sin zonas registradas</b>' + (editable ? 'Agrega las zonas autorizadas con el formulario.' : 'Aún no se captura el catálogo.') + '</div></td></tr>';
+        }
+
+        function limpiarForm() {
+            form.reset();
+            form.id.value = '';
+            $('tituloForm').lastChild.textContent = 'Agregar zona';
+            $('lblGuardar').textContent = 'Agregar zona';
+            $('btnCancelar').hidden = true;
+        }
+
+        async function cargar() {
+            datos = await SMS.api('/api/sms/zonas');
+            pintar();
+        }
+
+        $('habilitado').addEventListener('change', async function () {
+            var v = this.checked;
+            if (!confirm(v ? '¿Activar el módulo de zonas para todos los usuarios?' : '¿Apagar el módulo de zonas? Las zonas asignadas se conservan.')) { this.checked = !v; return; }
+            try { await SMS.api('/api/sms/zonas/config', { method: 'PUT', json: { habilitado: v } }); SAGA.toast(v ? 'Módulo de zonas activado' : 'Módulo de zonas apagado', 'success'); await cargar(); }
+            catch (e) { SAGA.toast(e.message, 'error'); this.checked = !v; }
+        });
+        document.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-editar]');
+            if (!b) return;
+            var z = datos.zonas.find(function (x) { return x.id === +b.dataset.editar; });
+            form.id.value = z.id; form.codigo.value = z.codigo; form.nombre.value = z.nombre; form.tipo.value = z.tipo || '';
+            form.descripcion.value = z.descripcion || ''; form.orden.value = z.orden; form.activo.checked = z.activo;
+            $('tituloForm').lastChild.textContent = 'Editar zona ' + z.codigo;
+            $('lblGuardar').textContent = 'Guardar cambios';
+            $('btnCancelar').hidden = false;
+            form.nombre.focus();
+        });
+        $('btnCancelar').addEventListener('click', limpiarForm);
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            var cuerpo = { codigo: form.codigo.value.trim(), nombre: form.nombre.value.trim(), tipo: form.tipo.value, descripcion: form.descripcion.value.trim(), orden: form.orden.value === '' ? 100 : Number(form.orden.value), activo: form.activo.checked };
+            if (!cuerpo.codigo || !cuerpo.nombre) { SAGA.toast('Código y nombre son obligatorios', 'warning'); return; }
+            try {
+                if (form.id.value) await SMS.api('/api/sms/zonas/' + form.id.value, { method: 'PATCH', json: cuerpo });
+                else await SMS.api('/api/sms/zonas', { method: 'POST', json: cuerpo });
+                SAGA.toast('Zona guardada', 'success');
+                limpiarForm();
+                await cargar();
+            } catch (er) { SAGA.toast(er.message, 'error'); }
+        });
+
+        Promise.all([cargar(), SMS.sesion()]).then(function (r) {
+            editable = !!(r[1] && r[1].capacidades.indexOf('configurar_zonas') >= 0);
+            pintar();
+        }).catch(function (e) {
+            $('avisos').innerHTML = '<div class="sg-banner crit">' + ic('crit') + '<span>No se pudo cargar el catálogo: ' + esc(e.message) + '</span></div>';
+        });
+    })();
+    </script>
+</body>
+</html>

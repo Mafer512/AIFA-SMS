@@ -1,0 +1,17 @@
+<%
+    // Pestañas del módulo SMS, visibles con o sin sesión.
+    // actual -> 'reportes' | 'analisis' | 'matriz' (pestaña de la página)
+    // La matriz se consulta sin sesión; solo un administrador la edita.
+    // corto: nombre en pantallas angostas, para que las tres quepan sin desplazarse.
+    const _pestanas = [
+        { clave: 'reportes', href: '/reportes/general', id: 'enlaceReportes', icono: 'table', texto: 'Reportes' },
+        { clave: 'analisis', href: '/reportes/analisis', id: 'enlaceAnalisis', icono: 'chart-bar', texto: 'Análisis estadístico', corto: 'Análisis' },
+        { clave: 'matriz', href: '/admin/matriz-riesgo', id: 'enlaceMatriz', icono: 'shield', texto: 'Matriz de riesgo' }
+    ];
+    const _actual = typeof actual !== 'undefined' ? actual : null;
+%>
+            <nav class="sms-nav" aria-label="Secciones del módulo">
+<% _pestanas.forEach(function (p) { %>
+                <a href="<%= p.href %>" id="<%= p.id %>"<% if (p.clave === _actual) { %> aria-current="page"<% } %>><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-<%= p.icono %>"/></svg><% if (p.corto) { %><span class="sms-nav__largo"><%= p.texto %></span><span class="sms-nav__corto"><%= p.corto %></span><% } else { %><%= p.texto %><% } %></a>
+<% }) %>
+            </nav>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .sg-pagehead__acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .seccion { margin-top: 32px; }
+        .seccion-titulo {
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: 8px 16px; flex-wrap: wrap; margin-bottom: 14px;
+        }
+        .seccion-titulo h2 { font-size: 22px; line-height: 28px; }
+        .seccion-titulo p { font-size: 13.5px; color: var(--n600); }
+
+        /* Paneles por área */
+        .deptos {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .depto {
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px 16px;
+            background: var(--sf);
+            border: 1px solid var(--n100); border-radius: 12px;
+            box-shadow: var(--sh-sm);
+            color: var(--n800); text-decoration: none;
+            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+        }
+        .depto:hover { border-color: var(--v400); box-shadow: var(--sh-md); color: var(--n900); }
+        .depto:focus-visible { outline: none; box-shadow: var(--focus); }
+        .depto-icono {
+            flex: none; width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--v50); color: var(--v700); border-radius: 8px;
+        }
+        .depto-texto { flex: 1; min-width: 0; }
+        .depto-nombre, .depto-meta { display: block; }
+        .depto-nombre { font-weight: 600; font-size: 14.5px; line-height: 1.3; color: var(--n900); }
+        .depto-meta { margin-top: 3px; font-size: 12.5px; color: var(--n500); font-variant-numeric: tabular-nums; }
+        .depto-meta.con-carga { color: var(--v700); font-weight: 500; }
+        .depto > .ic:last-child { color: var(--n400); width: 18px; height: 18px; transition: transform .15s ease, color .15s ease; }
+        .depto:hover > .ic:last-child { color: var(--v700); transform: translateX(2px); }
+
+        /* Tabla */
+        .folio-link { font: 500 13px/18px var(--fm); color: var(--v700); text-decoration: none; white-space: nowrap; }
+        .folio-link:hover { text-decoration: underline; }
+        .texto-corto { min-width: 160px; max-width: 320px; color: var(--n700); }
+        .fecha { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+        .vacio { padding: 32px 20px; text-align: center; color: var(--n500); font-size: 14px; }
+        .error { grid-column: 1 / -1; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    inicio: '/admin/reportes-rapidos',
+    extra: '<div class="sg-appbar__meta usuario"><strong id="usuarioNombre">—</strong><span id="usuarioRol"></span></div>' +
+           '<button type="button" class="btn btn-secondary btn-salir" id="btnSalir" title="Cerrar sesión"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-logout"/></svg><span class="lbl">Cerrar sesión</span></button>'
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <div class="sg-pagehead__row">
+                    <div>
+                        <span class="sg-kicker">Seguimiento de hallazgos · Administración</span>
+                        <h1>Administración general</h1>
+                        <p>Resumen de los reportes y acceso a los paneles de cada área.</p>
+                    </div>
+                    <div class="sg-pagehead__acciones">
+                        <a class="btn btn-secondary" href="/reportes/general">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg>
+                            Vista general
+                        </a>
+                        <a class="btn btn-primary" href="/reportes-rapidos">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-file-plus"/></svg>
+                            Nuevo reporte
+                        </a>
+                    </div>
+                </div>
+            </header>
+
+            <section class="sg-kpis" aria-label="Resumen de reportes">
+                <div class="sg-kpi">
+                    <div class="l"><span class="sg-light sg-light--brand"></span>Total de reportes</div>
+                    <div class="n" id="statTotal">—</div>
+                </div>
+                <div class="sg-kpi">
+                    <div class="l"><span class="sg-light sg-light--warn"></span>Generados</div>
+                    <div class="n" id="statNuevos">—</div>
+                </div>
+                <div class="sg-kpi">
+                    <div class="l"><span class="sg-light sg-light--info"></span>En atención</div>
+                    <div class="n" id="statProceso">—</div>
+                </div>
+                <div class="sg-kpi">
+                    <div class="l"><span class="sg-light sg-light--ok"></span>Resueltos</div>
+                    <div class="n" id="statResueltos">—</div>
+                </div>
+            </section>
+
+            <section class="seccion" aria-labelledby="tituloSMS">
+                <div class="seccion-titulo">
+                    <h2 id="tituloSMS">Gestión SMS</h2>
+                    <p>Análisis, indicadores, criterios de riesgo, notificaciones y control de cambios.</p>
+                </div>
+                <div class="deptos">
+                    <a class="depto" href="/reportes/analisis">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chart-bar"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Análisis estadístico</span><span class="depto-meta">Comparativos, desempeño por área, recurrencias y consistencia</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/notificaciones">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-bell"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Centro de notificaciones</span><span class="depto-meta">Actividad y alertas: vencidos, por verificar, por evaluar</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/reportes/ejecutivo">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Informe ejecutivo</span><span class="depto-meta">Resumen para dirección, listo para imprimir o PDF</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/spi">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-gauge"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Indicadores SPI</span><span class="depto-meta">Metas, niveles de alerta y recurrencia</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/zonas">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-map"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Zonas del aeropuerto</span><span class="depto-meta">Módulo opcional de ubicación por zonas</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/matriz-riesgo">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Matriz de riesgo</span><span class="depto-meta">Probabilidad, severidad, niveles y plazos</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/usuarios">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-users"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Usuarios y permisos</span><span class="depto-meta">Altas, roles, áreas y accesos</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/eliminados">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trash"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Reportes eliminados</span><span class="depto-meta">Copias de respaldo y restauración</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/respaldos">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-db"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Respaldos</span><span class="depto-meta">Copias automáticas de la base de datos</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                    <a class="depto" href="/admin/auditoria">
+                        <span class="depto-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg></span>
+                        <span class="depto-texto"><span class="depto-nombre">Bitácora de auditoría</span><span class="depto-meta">Quién cambió qué y cuándo</span></span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>
+                    </a>
+                </div>
+            </section>
+
+            <section class="seccion" aria-labelledby="tituloDeptos">
+                <div class="seccion-titulo">
+                    <h2 id="tituloDeptos">Paneles por área</h2>
+                    <p>Entra al panel de un área para dar seguimiento a sus reportes.</p>
+                </div>
+                <div class="deptos" id="listaDeptos">
+                    <div class="vacio"><span class="sg-spinner sg-spinner--sm" aria-hidden="true"></span> Cargando áreas…</div>
+                </div>
+            </section>
+
+            <section class="seccion" aria-labelledby="tituloRecientes">
+                <div class="seccion-titulo">
+                    <h2 id="tituloRecientes">Reportes más recientes</h2>
+                    <p>Los 10 últimos reportes recibidos.</p>
+                </div>
+                <div class="sg-table-wrap">
+                    <table class="sg-table">
+                        <thead>
+                            <tr>
+                                <th>Folio</th>
+                                <th>Fecha</th>
+                                <th>Categoría</th>
+                                <th>Lugar</th>
+                                <th>Áreas</th>
+                                <th>Estatus</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaRecientes">
+                            <tr><td colspan="6" class="vacio">Cargando reportes…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+        // Sesión
+        // ======
+        function leerSesion() {
+            try {
+                const token = localStorage.getItem('rsm_token');
+                const usuario = JSON.parse(localStorage.getItem('rsm_usuario') || 'null');
+                if (!token || !usuario) return null;
+
+                // Revisar si el token ya expiró (dura 2 horas)
+                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+
+                return { token, usuario };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function cerrarSesion() {
+            try {
+                localStorage.removeItem('rsm_token');
+                localStorage.removeItem('rsm_usuario');
+            } catch (e) { /* sin acceso a localStorage */ }
+            window.location.href = '/login';
+        }
+
+        const sesion = leerSesion();
+        if (!sesion) {
+            cerrarSesion();
+        } else {
+            document.getElementById('usuarioNombre').textContent = sesion.usuario.nombre || sesion.usuario.username;
+            document.getElementById('usuarioRol').textContent = sesion.usuario.rol === 'admin' ? 'Administrador' : (sesion.usuario.departamento || '');
+        }
+        document.getElementById('btnSalir').addEventListener('click', cerrarSesion);
+
+        // Utilidades
+        // ==========
+        const ESTADOS = {
+            A: 'Generado', B: 'Enterado', C: 'En atención',
+            D: 'Resuelto', E: 'Duplicado', F: 'No requiere atención'
+        };
+
+        function el(tag, props, hijos) {
+            const nodo = document.createElement(tag);
+            Object.entries(props || {}).forEach(([k, v]) => {
+                if (k === 'text') nodo.textContent = v;
+                else if (k === 'html') nodo.innerHTML = v;
+                else nodo.setAttribute(k, v);
+            });
+            (hijos || []).forEach(h => h && nodo.appendChild(h));
+            return nodo;
+        }
+
+        function formatearFecha(valor) {
+            if (!valor) return '—';
+            const fecha = new Date(valor);
+            if (isNaN(fecha)) return String(valor);
+            return fecha.toLocaleString('es-MX', {
+                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function recortar(texto, max) {
+            const t = String(texto || '').trim();
+            return t.length > max ? t.slice(0, max) + '…' : t;
+        }
+
+        // Estadísticas + conteo por departamento
+        // ======================================
+        let reportesPorDepto = {};
+
+        async function cargarGeneral() {
+            try {
+                const r = await fetch('/api/reportes/general');
+                const datos = await r.json();
+                if (!datos.success) throw new Error(datos.error);
+
+                // Mismos indicadores que la vista general (una fila por reporte)
+                const ind = (await SMS.api('/api/sms/indicadores')).indicadores;
+                document.getElementById('statTotal').textContent = ind.total;
+                document.getElementById('statNuevos').textContent = ind.nuevos;
+                document.getElementById('statProceso').textContent = ind.en_atencion;
+                document.getElementById('statResueltos').textContent = ind.resueltos;
+
+                // Reportes distintos a cargo de cada departamento
+                const mapa = {};
+                (datos.reportes || []).forEach(fila => {
+                    if (!fila.id_departamento) return;
+                    mapa[fila.id_departamento] = mapa[fila.id_departamento] || new Set();
+                    mapa[fila.id_departamento].add(fila.id);
+                });
+                reportesPorDepto = Object.fromEntries(Object.entries(mapa).map(([k, v]) => [k, v.size]));
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+                ['statTotal', 'statNuevos', 'statProceso', 'statResueltos']
+                    .forEach(id => document.getElementById(id).textContent = '—');
+                SAGA.toast('No se pudieron cargar las estadísticas.', 'error');
+            }
+        }
+
+        // Departamentos
+        // =============
+        async function cargarDepartamentos() {
+            const contenedor = document.getElementById('listaDeptos');
+            try {
+                const r = await fetch('/api/departamentos');
+                const datos = await r.json();
+                if (!datos.success) throw new Error(datos.error);
+
+                contenedor.innerHTML = '';
+                if (!datos.departamentos.length) {
+                    contenedor.appendChild(el('div', { class: 'vacio', text: 'No hay áreas activas.' }));
+                    return;
+                }
+
+                datos.departamentos.forEach(d => {
+                    const total = reportesPorDepto[d.id] || 0;
+                    const tarjeta = el('a', {
+                        class: 'depto',
+                        href: '/admin/panel/' + encodeURIComponent(d.codigo)
+                    }, [
+                        el('span', { class: 'depto-icono', html: SAGA.icono('building') }),
+                        el('span', { class: 'depto-texto' }, [
+                            el('span', { class: 'depto-nombre', text: d.nombre }),
+                            el('span', {
+                                class: 'depto-meta' + (total ? ' con-carga' : ''),
+                                text: total === 1 ? '1 reporte a cargo' : (total ? total + ' reportes a cargo' : 'Sin reportes a cargo')
+                            })
+                        ])
+                    ]);
+                    tarjeta.insertAdjacentHTML('beforeend', SAGA.icono('chevron-right'));
+                    contenedor.appendChild(tarjeta);
+                });
+            } catch (error) {
+                console.error('Error cargando departamentos:', error);
+                contenedor.innerHTML = '';
+                const aviso = el('div', { class: 'sg-banner crit error', html: SAGA.icono('crit') + '<span></span>' });
+                aviso.querySelector('span').textContent = 'No se pudieron cargar las áreas.';
+                contenedor.appendChild(aviso);
+            }
+        }
+
+        // Reportes recientes
+        // ==================
+        async function cargarRecientes() {
+            const cuerpo = document.getElementById('tablaRecientes');
+            try {
+                const r = await fetch('/api/reportes');
+                const datos = await r.json();
+                if (!datos.success) throw new Error(datos.error);
+
+                cuerpo.innerHTML = '';
+                const lista = (datos.reportes || []).slice(0, 10);
+                if (!lista.length) {
+                    cuerpo.appendChild(el('tr', {}, [el('td', { colspan: '6', class: 'vacio', text: 'Aún no hay reportes.' })]));
+                    return;
+                }
+
+                lista.forEach(rep => {
+                    const estado = ESTADOS[rep.estado] ? rep.estado : null;
+                    cuerpo.appendChild(el('tr', {}, [
+                        el('td', {}, [el('a', { class: 'folio-link', href: '/reportes/' + encodeURIComponent(rep.folio) + '/historial', text: rep.folio })]),
+                        el('td', { class: 'fecha', text: formatearFecha(rep.fecha) }),
+                        el('td', { class: 'texto-corto', text: recortar(rep.tipo_problema, 80) || '—' }),
+                        el('td', { class: 'texto-corto', text: recortar(rep.lugar, 80) || '—' }),
+                        el('td', { class: 'texto-corto', text: recortar(rep.departamentos_nombres, 90) || '—' }),
+                        el('td', {}, [el('span', {
+                            class: 'estado-badge' + (estado ? ' estado-' + estado : ''),
+                            text: estado ? ESTADOS[estado] : (rep.estado || '—')
+                        })])
+                    ]));
+                });
+            } catch (error) {
+                console.error('Error cargando reportes:', error);
+                cuerpo.innerHTML = '';
+                cuerpo.appendChild(el('tr', {}, [el('td', { colspan: '6', class: 'vacio', text: 'No se pudieron cargar los reportes.' })]));
+            }
+        }
+
+        if (sesion) {
+            cargarGeneral().then(cargarDepartamentos);
+            cargarRecientes();
+        }
+    </script>
+</body>
+</html>

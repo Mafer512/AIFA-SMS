@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notificación de hallazgos · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <script src="/js/buscable.js"></script>
+    <style>
+        .form-container { display: flex; flex-direction: column; gap: 20px; }
+
+        /* Encabezado de cada sección */
+        .sec-titulo { display: flex; align-items: baseline; gap: 12px; }
+        .section-title { font-size: 17px; line-height: 24px; }
+        .opcional {
+            font-size: 12px; font-weight: 500; color: var(--n500);
+            background: var(--n50); border: 1px solid var(--n100);
+            border-radius: 4px; padding: 2px 8px;
+        }
+
+        .campos-2 { display: grid; gap: 16px 20px; grid-template-columns: 1fr; }
+        @media (min-width: 640px) { .campos-2 { grid-template-columns: 1fr 1fr; } }
+
+        .form-group + .form-group { margin-top: 20px; }
+        .campos-2 .form-group + .form-group { margin-top: 0; }
+        .form-group > label, .form-group > .sg-label {
+            display: block; margin-bottom: 6px;
+            font-size: 13px; font-weight: 600; color: var(--n700);
+        }
+        .form-group > label small, .form-group > .sg-label small { font-weight: 400; color: var(--n500); }
+        .required { color: var(--r600); font-weight: 600; }
+
+        textarea { min-height: 130px; }
+
+        .char-counter {
+            margin-top: 6px;
+            text-align: right;
+            font-size: 12px; color: var(--n500);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tipo-problema-otro { margin-top: 10px; display: none; }
+
+        /* Áreas notificadas */
+        .checkboxes-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .checkbox-item {
+            display: flex; align-items: center; gap: 10px;
+            min-height: 44px; padding: 10px 12px;
+            background: var(--sf);
+            border: 1px solid var(--n200);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .checkbox-item:hover { border-color: var(--n300); background: var(--n50); }
+        .checkbox-item:has(input:checked) { border-color: var(--v600); background: var(--v50); }
+        .checkbox-item:has(input:focus-visible) { box-shadow: var(--focus); }
+        .checkbox-item input[type="checkbox"] { margin: 0; }
+        .checkbox-icon { display: none; }
+        .checkbox-label { font-size: 13.5px; font-weight: 500; line-height: 1.35; color: var(--n800); }
+        .checkbox-item:has(input:checked) .checkbox-label { color: var(--v900); }
+
+        .checkbox-item.sugerido,
+        .checkbox-item.precargado { border-color: var(--v600); background: var(--v50); }
+        .checkbox-item.sugerido .checkbox-label,
+        .checkbox-item.precargado .checkbox-label { font-weight: 600; color: var(--v900); }
+        .checkbox-item.precargado input:disabled { cursor: not-allowed; }
+
+        /* Tarjetas de departamento (selector alterno) */
+        .departamentos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; align-items: start; }
+        .departamentos-columna { display: flex; flex-direction: column; gap: 12px; }
+        .departamento-card {
+            display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+            border: 1px solid var(--n200); border-radius: 8px; cursor: pointer;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .departamento-card:hover { border-color: var(--n300); background: var(--n50); }
+        .departamento-card.selected { border-color: var(--v600); background: var(--v50); }
+        .departamento-icon { display: none; }
+        .departamento-info { flex: 1; }
+        .departamento-nombre { font-weight: 600; color: var(--n900); }
+        .departamento-desc, .departamento-descripcion { font-size: 12px; color: var(--n500); margin-top: 2px; }
+
+        /* Ubicación */
+        .gps {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px 16px; flex-wrap: wrap;
+            margin-top: 12px; padding: 12px 14px;
+            background: var(--n50); border: 1px dashed var(--n200); border-radius: 8px;
+        }
+        .gps p { font-size: 13px; color: var(--n600); }
+        .btn-ubicacion.is-ok { color: var(--v800); border-color: var(--v400); background: var(--v50); }
+        .btn-ubicacion .sg-spinner { width: 16px; height: 16px; border-width: 2px; }
+
+        .ubicacion-info { display: none; margin-top: 12px; }
+        .ubicacion-info.show { display: flex; }
+        .ubicacion-info .coords { font-family: var(--fm); font-size: 12.5px; color: var(--n800); }
+        .ubicacion-info small { color: var(--n500); font-size: 12px; }
+
+        /* Evidencia */
+        .files-grid { display: grid; gap: 12px; }
+        .dropzone {
+            width: 100%;
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 28px 16px;
+            background: var(--n50);
+            border: 1.5px dashed var(--n300);
+            border-radius: 12px;
+            color: var(--n700); text-align: center;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .dropzone:hover { border-color: var(--v600); background: var(--v50); }
+        .dropzone:focus-visible { outline: none; box-shadow: var(--focus); }
+        .dropzone .ic { width: 32px; height: 32px; color: var(--v700); margin-bottom: 4px; }
+        .dropzone b { font-size: 14.5px; }
+        .dropzone span { font-size: 12.5px; color: var(--n500); }
+
+        .previas { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+        .previa {
+            position: relative;
+            padding: 6px;
+            background: var(--sf); border: 1px solid var(--n200); border-radius: 8px;
+        }
+        .previa img { display: block; width: 100%; height: 88px; object-fit: cover; border-radius: 4px; }
+        .previa-video {
+            height: 88px; display: flex; align-items: center; justify-content: center; gap: 6px;
+            background: var(--n50); border-radius: 4px; font-size: 12px; color: var(--n600);
+        }
+        .previa-nombre {
+            margin-top: 6px; font-size: 11.5px; color: var(--n600);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .previa-quitar {
+            position: absolute; top: -8px; right: -8px;
+            width: 26px; height: 26px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: var(--sf); color: var(--n700);
+            border: 1px solid var(--n200); border-radius: 50%;
+            box-shadow: var(--sh-md);
+        }
+        .previa-quitar:hover { color: var(--r600); border-color: var(--r500); }
+        .previa-quitar .ic { width: 14px; height: 14px; }
+
+        /* Envío */
+        .submit-section { display: flex; flex-direction: column; gap: 14px; }
+        .submit-section .sg-help { text-align: center; }
+        .btn-submit { width: 100%; }
+
+        /* Superposición de envío */
+        .loading-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            display: none; align-items: center; justify-content: center;
+            padding: 16px;
+            background: rgba(20,26,31,.55);
+            -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+        }
+        .loading-overlay.show { display: flex; }
+        .loading-content {
+            position: relative; overflow: hidden;
+            width: min(320px, 100%);
+            padding: 32px 24px 28px;
+            background: var(--sf); border-radius: 12px; box-shadow: var(--sh-lg);
+            text-align: center;
+        }
+        .loading-content::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--estela); }
+        .loading-content .sg-spinner { width: 36px; height: 36px; border-width: 3px; margin-bottom: 14px; }
+        .loading-content h3 { font-size: 17px; }
+        .loading-content p { margin-top: 4px; font-size: 13.5px; color: var(--n600); }
+
+        /* Confirmación + WhatsApp */
+        .whatsapp-modal {
+            position: fixed; inset: 0; z-index: 10001;
+            display: none; align-items: center; justify-content: center;
+            padding: 16px;
+            background: rgba(20,26,31,.55);
+            -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+        }
+        .whatsapp-modal.show { display: flex; }
+        .whatsapp-content {
+            position: relative; overflow: hidden;
+            width: 100%; max-width: 460px; max-height: calc(100vh - 32px); overflow-y: auto;
+            padding: 32px 28px 24px;
+            background: var(--sf); border-radius: 12px; box-shadow: var(--sh-lg);
+            text-align: center;
+        }
+        .whatsapp-content::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--estela); }
+        .exito-icono {
+            width: 56px; height: 56px; margin: 0 auto 14px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--v100); color: var(--v700); border-radius: 50%;
+        }
+        .exito-icono .ic { width: 30px; height: 30px; }
+        .whatsapp-content h3 { font-size: 20px; line-height: 28px; }
+        .folio-generado { margin: 8px 0 0; font-size: 13.5px; color: var(--n600); }
+        .folio-generado strong {
+            display: inline-block; margin-left: 4px; padding: 2px 8px;
+            font: 600 14px/20px var(--fm); color: var(--n900);
+            background: var(--n50); border: 1px solid var(--n200); border-radius: 4px;
+        }
+        .pregunta { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--n100); font-weight: 600; color: var(--n900); }
+        .whatsapp-links { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+        .whatsapp-link {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px;
+            background: var(--sf); color: var(--n800);
+            border: 1px solid var(--n200); border-radius: 8px;
+            font-weight: 600; font-size: 14px; text-decoration: none; text-align: left;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .whatsapp-link:hover { border-color: var(--v600); background: var(--v50); color: var(--v900); }
+        .whatsapp-link .ic { color: var(--v700); }
+        .whatsapp-link .ic:last-child { margin-left: auto; color: var(--n400); width: 16px; height: 16px; }
+        .modal-acciones { display: flex; gap: 10px; justify-content: center; margin-top: 22px; }
+        .modal-acciones .btn { flex: 1; }
+
+        /* Aviso de confidencialidad */
+        .aviso-conf { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; background: var(--sf); border: 1px solid var(--v400); border-left-width: 4px; border-radius: 12px; box-shadow: var(--sh-sm); }
+        .aviso-conf > .ic { flex: none; width: 24px; height: 24px; color: var(--v700); margin-top: 2px; }
+        .aviso-conf h2 { font-size: 15.5px; line-height: 22px; color: var(--n900); }
+        .aviso-conf p { margin-top: 6px; font-size: 13.5px; line-height: 1.5; color: var(--n700); }
+        .aviso-conf details { margin-top: 10px; font-size: 13.5px; color: var(--n700); }
+        .aviso-conf summary { cursor: pointer; font-weight: 600; color: var(--v700); }
+        .glosario { margin: 10px 0 0; display: grid; gap: 8px; }
+        .glosario div { display: grid; gap: 2px; }
+        .glosario dt { font-weight: 600; color: var(--n900); }
+        .glosario dd { margin: 0; line-height: 1.45; }
+
+        .aviso-conf .fuente { margin-top: 10px; font-size: 12px; color: var(--n500); }
+
+        /* Tipo de reporte: voluntario u obligatorio (numeral 5.2.1 del Manual SMS) */
+        .grupos-rep { display: grid; gap: 16px; margin-top: 4px; }
+        .grupo-rep { display: grid; gap: 8px; }
+        .grupo-rep__cab { display: grid; gap: 2px; }
+        .grupo-rep__cab b { font: 700 11px var(--ft); letter-spacing: .08em; text-transform: uppercase; color: var(--v700); }
+        .grupo-rep__cab span { font-size: 12.5px; color: var(--n600); }
+        .tipos-reporte { display: grid; gap: 8px; grid-template-columns: 1fr; }
+        .tipo-rep {
+            display: flex; gap: 10px; align-items: flex-start;
+            padding: 11px 12px; min-height: 44px;
+            background: var(--sf); border: 1px solid var(--n200); border-radius: 8px; cursor: pointer;
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .tipo-rep:hover { border-color: var(--n300); background: var(--n50); }
+        .tipo-rep:has(input:checked) { border-color: var(--v600); background: var(--v50); }
+        .tipo-rep:has(input:focus-visible) { box-shadow: var(--focus); }
+        .tipo-rep input { margin: 3px 0 0; flex: none; }
+        .tipo-rep b { display: block; font-size: 13.5px; color: var(--n900); }
+        .tipo-rep small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--n600); }
+
+        /* Secciones plegables y escalas */
+        .plegable > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--v700); list-style: none; display: flex; align-items: center; gap: 8px; min-height: 32px; }
+        .plegable > summary::-webkit-details-marker { display: none; }
+        .plegable > summary .ic { width: 18px; height: 18px; transition: transform .15s ease; }
+        .plegable[open] > summary .ic { transform: rotate(90deg); }
+        .plegable > .campos-2 { margin-top: 14px; }
+        .escala-desc { margin-top: 6px; font-size: 12.5px; color: var(--n600); min-height: 18px; }
+
+        @media (max-width: 640px) {
+            .checkboxes-container, .departamentos-grid { grid-template-columns: 1fr !important; }
+            .departamentos-columna { display: contents; }
+        }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/login', texto: 'Acceso', icono: 'login', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap sg-wrap--narrow">
+            <header class="sg-pagehead header">
+                <span class="sg-kicker">Seguridad operacional · SMS</span>
+                <h1>Notificación de hallazgos</h1>
+                <p>Reporta cualquier condición que pueda afectar la operación: presencia de fauna, luces inoperativas, daños en el pavimento, objetos extraños (FOD) y más.</p>
+            </header>
+
+            <!-- Aviso de confidencialidad: Política General de Seguridad Operacional (numeral 1.4 del Manual SMS, compromisos 9 y 10) -->
+            <section class="aviso-conf" aria-labelledby="tituloAviso" style="margin-bottom:20px">
+                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-lock"/></svg>
+                <div>
+                    <h2 id="tituloAviso">Tu reporte es confidencial</h2>
+                    <p>La Política General de Seguridad Operacional del AIFA (numeral 1.4 del Manual SMS) alienta la cultura de reporte confidencial y aplica la no punitividad a los reportes voluntarios, a menos que se trate de un acto ilegal, negligente, descuido deliberado o intencional.</p>
+                    <p>Tus datos personales son opcionales: puedes reportar sin dar tu nombre. Si los das, no se publican con el reporte; solo los ve el personal con acceso autorizado al sistema, por si necesita pedirte más información.</p>
+                    <details>
+                        <summary>Definiciones: peligro, consecuencia, riesgo y seguridad operacional</summary>
+                        <dl class="glosario">
+                            <div><dt>Peligro</dt><dd>Condición u objeto que podría provocar un incidente o accidente de aviación o contribuir al mismo.</dd></div>
+                            <div><dt>Consecuencia</dt><dd>El posible resultado de un peligro.</dd></div>
+                            <div><dt>Riesgo</dt><dd>La probabilidad y la gravedad previstas de las consecuencias o resultados de un peligro.</dd></div>
+                            <div><dt>Seguridad operacional</dt><dd>Estado en que los riesgos asociados a las actividades de aviación relativas a la operación de las aeronaves, o que apoyan directamente dicha operación, se reducen y controlan a un nivel aceptable.</dd></div>
+                        </dl>
+                        <p class="fuente">Fuente: NOM-064-SCT3-2023 y Anexo 19 de la OACI (3ª Ed., 2025), según la Agenda SMS 2026 del AIFA.</p>
+                    </details>
+                </div>
+            </section>
+
+            <form id="formReporteRapido" class="form-container container">
+                <!-- Sección 1: Información del reportante (opcional) -->
+                <section class="sg-card section">
+                    <div class="sg-card__head">
+                        <div class="sec-titulo">
+                            <span class="sg-secnum">01</span>
+                            <h2 class="section-title">Información del reportante</h2>
+                        </div>
+                        <span class="opcional">Opcional</span>
+                    </div>
+                    <div class="sg-card__body campos-2">
+                        <div class="form-group">
+                            <label for="nombre">Nombre completo</label>
+                            <input type="text" id="nombre" name="nombre" maxlength="200" placeholder="Ej. Juan Pérez García" autocomplete="name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="telefono">Teléfono de contacto</label>
+                            <input type="tel" id="telefono" name="telefono" maxlength="30" placeholder="Ej. 5551234567" autocomplete="tel" inputmode="tel">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="area">Gerencia o área a la que pertenece</label>
+                            <select id="area" name="area" autocomplete="off">
+                                <option value="">Selecciona tu área…</option>
+                                <option value="__otra">Otra (escribirla)</option>
+                            </select>
+                            <input type="text" id="area_otra" maxlength="100" placeholder="Escribe tu gerencia, área o empresa" autocomplete="organization" hidden style="margin-top:8px">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cargo">Cargo</label>
+                            <input type="text" id="cargo" name="cargo" maxlength="100" placeholder="Ej. Supervisor de …" autocomplete="organization-title">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sección 2: Descripción del hallazgo -->
+                <section class="sg-card section">
+                    <div class="sg-card__head">
+                        <div class="sec-titulo">
+                            <span class="sg-secnum">02</span>
+                            <h2 class="section-title">Descripción del hallazgo</h2>
+                        </div>
+                    </div>
+                    <div class="sg-card__body">
+                        <div class="form-group">
+                            <span class="sg-label" id="lblTipoReporte">¿Qué quieres reportar? <span class="required" aria-hidden="true">*</span></span>
+                            <div class="grupos-rep" role="radiogroup" aria-labelledby="lblTipoReporte" aria-required="true">
+                                <% Object.keys(gruposReporte).forEach(function (g) { %>
+                                <div class="grupo-rep">
+                                    <div class="grupo-rep__cab"><b><%= gruposReporte[g].nombre %></b><span><%= gruposReporte[g].objetivo %></span></div>
+                                    <div class="tipos-reporte">
+                                        <% tiposReporte.filter(function (t) { return t.grupo === g; }).forEach(function (t) { %>
+                                        <label class="tipo-rep">
+                                            <input type="radio" name="tipo_reporte" value="<%= t.clave %>">
+                                            <span><b><%= t.nombre %></b><small><%= t.descripcion %></small></span>
+                                        </label>
+                                        <% }) %>
+                                    </div>
+                                </div>
+                                <% }) %>
+                            </div>
+                            <p class="sg-help" style="margin-top:8px">Reportes voluntarios y obligatorios según el numeral 5.2.1 del Manual SMS.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tipo_problema">Categoría del hallazgo <span class="required" aria-hidden="true">*</span></label>
+                            <select id="tipo_problema" name="tipo_problema" required>
+                                <option value="">Cargando categorías…</option>
+                            </select>
+                            <div class="tipo-problema-otro" id="tipo_problema_otro_container">
+                                <input type="text" id="tipo_problema_otro" name="tipo_problema_otro" maxlength="100" placeholder="Especifica la categoría">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="descripcion">Descripción detallada del hallazgo <span class="required" aria-hidden="true">*</span></label>
+                            <textarea id="descripcion" name="descripcion" maxlength="1000" required
+                                      placeholder="Describe el hallazgo con el mayor detalle posible: riesgos, afectaciones y cualquier dato relevante."></textarea>
+                            <div class="char-counter">
+                                <span id="descripcion_counter">0</span>/1000 caracteres
+                            </div>
+                        </div>
+
+                        <!-- Áreas notificadas -->
+                        <div class="form-group">
+                            <span class="sg-label">
+                                Áreas notificadas <span class="required" aria-hidden="true">*</span>
+                                <small>(selecciona al menos una)</small>
+                            </span>
+                            <div id="departamentosResponsablesContainer" class="checkboxes-container" role="group" aria-label="Áreas notificadas">
+                                <!-- Se llenan dinámicamente con JavaScript -->
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lugar">Ubicación del hallazgo <span class="required" aria-hidden="true">*</span></label>
+                            <div class="ubicacion-input">
+                                <input type="text" id="lugar" name="lugar" maxlength="500" required
+                                       placeholder="Ej. Cerca de la posición 601, en plataforma de carga">
+                                <div class="char-counter">
+                                    <span id="lugar_counter">0</span>/500 caracteres
+                                </div>
+                            </div>
+
+                            <div class="gps">
+                                <p>Agrega las coordenadas GPS para una ubicación precisa.</p>
+                                <button type="button" class="btn btn-secondary btn-ubicacion" id="btnObtenerUbicacion">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-crosshair"/></svg>
+                                    <span>Obtener ubicación GPS</span>
+                                </button>
+                            </div>
+
+                            <!-- Información de ubicación obtenida -->
+                            <div class="sg-banner ubicacion-info" id="ubicacionInfo" role="status">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pin"/></svg>
+                                <div>
+                                    <strong>Ubicación GPS obtenida</strong><br>
+                                    <span class="coords" id="coordenadasTexto"></span><br>
+                                    <small id="precisionTexto"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sección 3: Datos operacionales (si aplica) -->
+                <section class="sg-card section">
+                    <div class="sg-card__head">
+                        <div class="sec-titulo">
+                            <span class="sg-secnum">03</span>
+                            <h2 class="section-title">Vuelo y equipo involucrados</h2>
+                        </div>
+                        <span class="opcional">Si aplica</span>
+                    </div>
+                    <div class="sg-card__body">
+                        <details class="plegable" id="plegableOperacion">
+                            <summary><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chevron-right"/></svg>Agregar el vuelo o el equipo involucrado</summary>
+                            <div class="campos-2">
+                                <div class="form-group">
+                                    <label for="vuelo">Número de vuelo</label>
+                                    <input type="text" id="vuelo" name="vuelo" maxlength="10" placeholder="Ej. VB1234" autocomplete="off" autocapitalize="characters">
+                                </div>
+                                <div class="form-group">
+                                    <label for="matricula">Matrícula de la aeronave</label>
+                                    <input type="text" id="matricula" name="matricula" maxlength="12" placeholder="Ej. XA-ABC" autocomplete="off" autocapitalize="characters">
+                                </div>
+                                <div class="form-group">
+                                    <label for="posicion">Posición</label>
+                                    <input type="text" id="posicion" name="posicion" maxlength="20" placeholder="Ej. 601" autocomplete="off" autocapitalize="characters">
+                                </div>
+                                <div class="form-group">
+                                    <label for="gse_tipo">Equipo de apoyo en tierra (GSE)</label>
+                                    <select id="gse_tipo" name="gse_tipo">
+                                        <option value="">No aplica</option>
+                                        <% gseTipos.forEach(function (g) { %><option><%= g %></option><% }) %>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="gse_numero">Número económico del equipo</label>
+                                    <input type="text" id="gse_numero" name="gse_numero" maxlength="30" placeholder="Ej. T-045" autocomplete="off" autocapitalize="characters">
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </section>
+
+                <!-- Sección 4: Evidencia gráfica -->
+                <section class="sg-card section">
+                    <div class="sg-card__head">
+                        <div class="sec-titulo">
+                            <span class="sg-secnum">04</span>
+                            <h2 class="section-title">Evidencia gráfica</h2>
+                        </div>
+                        <span class="opcional">Opcional</span>
+                    </div>
+                    <div class="sg-card__body">
+                        <div class="files-grid" id="filesGrid">
+                            <!-- Se genera dinámicamente -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sección 5: Opinión de quien reporta -->
+                <section class="sg-card section">
+                    <div class="sg-card__head">
+                        <div class="sec-titulo">
+                            <span class="sg-secnum">05</span>
+                            <h2 class="section-title">Tu opinión</h2>
+                        </div>
+                        <span class="opcional">Opcional</span>
+                    </div>
+                    <div class="sg-card__body">
+                        <p class="sg-help" style="margin-bottom:14px">Tu experiencia ayuda a la Gerencia de SMS a priorizar. No es la evaluación oficial del riesgo.</p>
+                        <div class="campos-2">
+                            <div class="form-group">
+                                <label for="percepcion_probabilidad">¿Con qué frecuencia crees que pasa?</label>
+                                <select id="percepcion_probabilidad" name="percepcion_probabilidad" aria-describedby="descProbabilidad">
+                                    <option value="">Prefiero no opinar</option>
+                                    <% escalaProbabilidad.forEach(function (p) { %><option value="<%= p.valor %>" data-desc="<%= p.descripcion %>"><%= p.valor %> · <%= p.nombre %></option><% }) %>
+                                </select>
+                                <p class="escala-desc" id="descProbabilidad"></p>
+                            </div>
+                            <div class="form-group">
+                                <label for="percepcion_severidad">¿Qué tan grave podría ser?</label>
+                                <select id="percepcion_severidad" name="percepcion_severidad" aria-describedby="descSeveridad">
+                                    <option value="">Prefiero no opinar</option>
+                                    <% escalaSeveridad.forEach(function (s) { %><option value="<%= s.valor %>" data-desc="<%= s.descripcion %>"><%= s.valor %> · <%= s.nombre %></option><% }) %>
+                                </select>
+                                <p class="escala-desc" id="descSeveridad"></p>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:16px">
+                            <label for="sugerencia_prevencion">¿Qué podemos hacer para prevenirlo?</label>
+                            <textarea id="sugerencia_prevencion" name="sugerencia_prevencion" maxlength="1000" style="min-height:90px"
+                                      placeholder="Tu propuesta para que no vuelva a pasar o para corregirlo."></textarea>
+                            <div class="char-counter"><span id="sugerencia_counter">0</span>/1000 caracteres</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Campos ocultos -->
+                <input type="hidden" id="latitud" name="latitud">
+                <input type="hidden" id="longitud" name="longitud">
+                <input type="hidden" id="precision" name="precision">
+
+                <!-- Envío -->
+                <section class="sg-card sg-card__body submit-section">
+                    <button type="button" class="btn btn-primary btn-lg btn-submit" id="btnSubmit">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-send"/></svg>
+                        <span>Enviar reporte</span>
+                    </button>
+                    <p class="sg-help">Los campos marcados con <span class="required">*</span> son obligatorios. Al enviar, se notificará a las áreas seleccionadas.</p>
+                </section>
+            </form>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <!-- Superposición de envío -->
+    <div class="loading-overlay" id="loadingOverlay" role="alertdialog" aria-modal="true" aria-labelledby="tituloEnviando">
+        <div class="loading-content">
+            <span class="sg-spinner" aria-hidden="true"></span>
+            <h3 id="tituloEnviando">Enviando reporte…</h3>
+            <p>Por favor espera, no cierres esta ventana.</p>
+        </div>
+    </div>
+
+    <!-- Confirmación y WhatsApp -->
+    <div class="whatsapp-modal" id="whatsappModal" role="dialog" aria-modal="true" aria-labelledby="tituloExito">
+        <div class="whatsapp-content">
+            <div class="exito-icono"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-ok"/></svg></div>
+            <h3 id="tituloExito">Reporte enviado</h3>
+            <p class="folio-generado">Folio: <strong id="folioGenerado"></strong></p>
+
+            <p class="pregunta">¿Deseas notificar también por WhatsApp?</p>
+
+            <div id="whatsappLinksContainer" style="display: none;">
+                <div class="whatsapp-links" id="whatsappLinks">
+                    <!-- Enlaces generados dinámicamente -->
+                </div>
+            </div>
+
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secondary" id="btnSalir">Salir</button>
+                <button type="button" class="btn btn-primary" id="btnMostrarWhatsApp">Sí</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor de avisos -->
+    <div id="toastContainer"></div>
+
+    <script>
+        // Configuración inicial
+        const API_BASE = '/api';
+        let departamentosSeleccionados = new Set();
+        let archivosSeleccionados = new Map();
+        let ubicacionObtenida = false;
+        // Variables globales
+        let reportesData = [];
+        let paginaActual = 1;
+        const registrosPorPagina = 10;
+        let filtrosActivos = {};
+        let folioActual = ''; 
+        // Campos opcionales de clasificación (datos operacionales y opinión):
+        // se envían con el reporte y se guardan en el borrador
+        const CAMPOS_EXTRA = ['vuelo', 'matricula', 'posicion', 'gse_tipo', 'gse_numero',
+            'percepcion_probabilidad', 'percepcion_severidad', 'sugerencia_prevencion'];
+        // Escalas de la opinión: campo y texto que describe el valor elegido
+        const ESCALAS = [['percepcion_probabilidad', 'descProbabilidad'], ['percepcion_severidad', 'descSeveridad']];
+        
+        console.log('Variables globales inicializadas');
+
+        // INICIALIZACIÓN PRINCIPAL
+        // ========================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Inicializando aplicación...');
+            
+            // 1. Inicializar formulario
+            inicializarFormulario();
+            
+            // 2. Inicializar campos de archivos
+            inicializarCamposArchivos();
+            
+            // 3. Configurar event listeners básicos
+            configurarEventListeners();
+            
+            // 4. Cargar datos iniciales en paralelo
+            Promise.all([
+                cargarTodosDepartamentos(),
+                cargarTiposProblemas()
+            ]).then(() => {
+                console.log('Datos iniciales cargados');
+            }).catch(error => {
+                console.error('Error cargando datos iniciales:', error);
+            });
+            
+            // 5. Event listener DIRECTO para el botón Submit
+            const btnSubmit = document.getElementById('btnSubmit');
+            if (btnSubmit) {
+                console.log('Botón Submit encontrado');
+                btnSubmit.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Botón Submit clickeado');
+                    
+                    // Validar primero
+                    if (!validarFormulario()) {
+                        console.log('Validación fallida');
+                        return;
+                    }
+                    
+                    console.log('Validación exitosa, enviando...');
+                    // Llamar a enviarReporte
+                    enviarReporte(e);
+                });
+            } else {
+                console.error('Botón Submit NO encontrado');
+            }
+            
+
+
+            // Botón Salir
+            const btnSalir = document.getElementById('btnSalir');
+            if (btnSalir) {
+                btnSalir.addEventListener('click', function() {
+                    console.log('Botón Salir clickeado');
+                    window.location.href = '/reportes-rapidos';
+                });
+            }
+
+            // Botón Sí
+            const btnMostrarWhatsApp = document.getElementById('btnMostrarWhatsApp');
+            if (btnMostrarWhatsApp) {
+                btnMostrarWhatsApp.addEventListener('click', function() {
+                    console.log('Botón Sí clickeado - Mostrando opciones WhatsApp');
+                    const container = document.getElementById('whatsappLinksContainer');
+                    
+                    if (container.style.display === 'none') {
+                        container.style.display = 'block';
+                        this.textContent = 'Ocultar';
+                    } else {
+                        container.style.display = 'none';
+                        this.textContent = 'Sí';
+                    }
+                });
+            }
+            
+            console.log('Inicialización completa');
+        });
+
+        function inicializarFormulario() {
+            // Configurar contador de caracteres
+            configurarContadorCaracteres('lugar', 'lugar_counter');
+            configurarContadorCaracteres('descripcion', 'descripcion_counter');
+            configurarContadorCaracteres('sugerencia_prevencion', 'sugerencia_counter');
+
+            // Listas largas: se escribe y se filtran las opciones
+            if (window.SAGABuscable) {
+                SAGABuscable.mejorar(document.getElementById('tipo_problema'), { vacio: 'Escribe para buscar o elige de la lista' });
+                SAGABuscable.mejorar(document.getElementById('area'), { vacio: 'Escribe tu gerencia o área' });
+                SAGABuscable.mejorar(document.getElementById('gse_tipo'), { vacio: 'No aplica · escribe para buscar' });
+            }
+
+            // Descripción de la escala elegida (frecuencia y gravedad)
+            ESCALAS.forEach(function (par) {
+                document.getElementById(par[0]).addEventListener('change', function () { describirEscala(par[0], par[1]); });
+            });
+
+            // Configurar tipo de problema
+            const selectTipoProblema = document.getElementById('tipo_problema');
+            
+            // Event listener para campo "Otro"
+            selectTipoProblema.addEventListener('change', function() {
+                const otroContainer = document.getElementById('tipo_problema_otro_container');
+                if (this.value === 'Otro') {
+                    otroContainer.style.display = 'block';
+                    document.getElementById('tipo_problema_otro').required = true;
+                } else {
+                    otroContainer.style.display = 'none';
+                    document.getElementById('tipo_problema_otro').required = false;
+                }
+            });
+            
+            //Event listener para cargar departamentos sugeridos
+            selectTipoProblema.addEventListener('change', cargarDepartamentosSugeridos);
+            console.log('Listener agregado a tipo de problema para sugerencias');
+        }
+
+        // Cargar departamentos desde API (dinámico)
+        async function cargarDepartamentosDesdeAPI() {
+            try {
+                console.log('Cargando departamentos desde API...');
+                const response = await fetch('/api/departamentos');
+                const data = await response.json();
+                
+                if (data.success && data.departamentos) {
+                    console.log(` ${data.departamentos.length} departamentos cargados`);
+                    renderizarDepartamentos(data.departamentos);
+                } else {
+                    throw new Error('Error al cargar departamentos');
+                }
+            } catch (error) {
+                console.error('Error cargando departamentos:', error);
+                // Fallback: usar array local si falla la API
+                console.log('Usando departamentos locales como fallback');
+                renderizarDepartamentos(departamentos);
+            }
+        }
+
+        // Lista "Gerencia o área a la que pertenece": áreas activas del sistema + "Otra"
+        function llenarGerencias(listaDepartamentos) {
+            const select = document.getElementById('area');
+            const elegida = select.value || select.dataset.pendiente || '';
+            const nombres = Array.from(new Set((listaDepartamentos || []).map(d => d.nombre).filter(Boolean)))
+                .sort((a, b) => a.localeCompare(b, 'es'));
+            select.innerHTML = '<option value="">Selecciona tu área…</option>' +
+                nombres.map(n => { const o = document.createElement('option'); o.textContent = n; return o.outerHTML; }).join('') +
+                '<option value="__otra">Otra (escribirla)</option>';
+            if (elegida) select.value = elegida;
+            delete select.dataset.pendiente;
+            document.getElementById('area_otra').hidden = select.value !== '__otra';
+        }
+        document.getElementById('area').addEventListener('change', function () {
+            const otra = document.getElementById('area_otra');
+            otra.hidden = this.value !== '__otra';
+            if (!otra.hidden) otra.focus();
+        });
+        function valorGerencia() {
+            const v = document.getElementById('area').value;
+            return v === '__otra' ? document.getElementById('area_otra').value.trim() : v;
+        }
+
+        // Función para renderizar departamentos en el DOM
+        function renderizarDepartamentos(listaDepartamentos) {
+            llenarGerencias(listaDepartamentos);
+            const grid = document.getElementById('departamentosGrid');
+            grid.innerHTML = ''; // Limpiar contenido previo
+            
+            // Calcular punto medio
+            const total = listaDepartamentos.length;
+            const puntoMedio = Math.ceil(total / 2);
+            
+            // Dividir en dos grupos
+            const primeraColumna = listaDepartamentos.slice(0, puntoMedio);
+            const segundaColumna = listaDepartamentos.slice(puntoMedio);
+            
+            // Función auxiliar para crear una card
+            function crearCard(dept) {
+                const card = document.createElement('div');
+                card.className = 'departamento-card';
+                card.dataset.id = dept.id;
+                
+                card.innerHTML = `
+                    <input type="checkbox" id="dept_${dept.id}" name="departamentos" value="${dept.id}">
+                    <div class="departamento-icon">${dept.icono}</div>
+                    <div class="departamento-info">
+                        <div class="departamento-nombre">${dept.nombre}</div>
+                        <div class="departamento-descripcion">${dept.descripcion}</div>
+                    </div>
+                `;
+                
+                // Event listener para selección
+                card.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'INPUT') {
+                        const checkbox = this.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                    }
+                    actualizarSeleccionDepartamento(dept.id, this.querySelector('input').checked);
+                });
+                
+                return card;
+            }
+            
+            // Crear dos contenedores de columna
+            const columna1 = document.createElement('div');
+            columna1.className = 'departamentos-columna';
+            
+            const columna2 = document.createElement('div');
+            columna2.className = 'departamentos-columna';
+            
+            // Agregar departamentos a la primera columna
+            primeraColumna.forEach(dept => {
+                columna1.appendChild(crearCard(dept));
+            });
+            
+            // Agregar departamentos a la segunda columna
+            segundaColumna.forEach(dept => {
+                columna2.appendChild(crearCard(dept));
+            });
+            
+            // Agregar columnas al grid
+            grid.appendChild(columna1);
+            grid.appendChild(columna2);
+        }
+
+        function actualizarSeleccionDepartamento(id, seleccionado) {
+            const card = document.querySelector(`.departamento-card[data-id="${id}"]`);
+            
+            if (seleccionado) {
+                departamentosSeleccionados.add(id);
+                card.classList.add('selected');
+            } else {
+                departamentosSeleccionados.delete(id);
+                card.classList.remove('selected');
+            }
+        }
+
+        function inicializarCamposArchivos() {
+            const grid = document.getElementById('filesGrid');
+
+            grid.innerHTML = `
+                <input type="file" id="archivos_input" accept="image/*" multiple hidden>
+                <button type="button" id="btn_seleccionar_archivos" class="dropzone">
+                    ${SAGA.icono('camera')}
+                    <b>Seleccionar imágenes</b>
+                    <span>Hasta 5 imágenes · JPG, PNG, WebP o GIF · máximo 10 MB cada una</span>
+                </button>
+                <div id="vista_previa_archivos" class="previas"></div>
+            `;
+
+            document.getElementById('btn_seleccionar_archivos').addEventListener('click', function() {
+                document.getElementById('archivos_input').click();
+            });
+
+            document.getElementById('archivos_input').addEventListener('change', function() {
+                procesarArchivos(this.files);
+            });
+        }
+
+        function procesarArchivos(files) {
+            const vistaPrevia = document.getElementById('vista_previa_archivos');
+            vistaPrevia.innerHTML = '';
+            archivosSeleccionados.clear();
+
+            if (files.length > 5) {
+                mostrarToast('Máximo 5 archivos permitidos', 'error');
+                document.getElementById('archivos_input').value = '';
+                return;
+            }
+
+            const videos = Array.from(files).filter(f => f.type.startsWith('video/'));
+            if (videos.length > 1) {
+                mostrarToast('Solo se permite un video por reporte', 'error');
+                document.getElementById('archivos_input').value = '';
+                return;
+            }
+
+            Array.from(files).forEach((file, index) => {
+                const maxSize = file.type.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+
+                if (file.size > maxSize) {
+                    mostrarToast(`${file.name} excede el tamaño máximo`, 'error');
+                    return;
+                }
+
+                archivosSeleccionados.set(index + 1, file);
+
+                // Crear miniatura
+                const div = document.createElement('div');
+                div.className = 'previa';
+
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.alt = file.name;
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+
+                    div.appendChild(img);
+                } else {
+                    div.innerHTML = '<div class="previa-video">' + SAGA.icono('video', 'ic-18') + 'Video</div>';
+                }
+
+                // Botón eliminar
+                const btnEliminar = document.createElement('button');
+                btnEliminar.type = 'button';
+                btnEliminar.className = 'previa-quitar';
+                btnEliminar.setAttribute('aria-label', 'Quitar ' + file.name);
+                btnEliminar.innerHTML = SAGA.icono('x');
+                btnEliminar.onclick = function() {
+                    archivosSeleccionados.delete(index + 1);
+                    div.remove();
+                    if (archivosSeleccionados.size === 0) {
+                        document.getElementById('archivos_input').value = '';
+                    }
+                };
+
+                div.appendChild(btnEliminar);
+
+                // Nombre del archivo
+                const nombre = document.createElement('div');
+                nombre.className = 'previa-nombre';
+                nombre.title = file.name;
+                nombre.textContent = file.name;
+                div.appendChild(nombre);
+
+                vistaPrevia.appendChild(div);
+            });
+        }
+        
+        function manejarArchivosMultiples(input) {
+            const files = Array.from(input.files);
+            const divInfo = document.getElementById('archivos_seleccionados');
+            
+            // Limpiar selección previa
+            archivosSeleccionados.clear();
+            
+            // Validar cantidad
+            if (files.length > 5) {
+                mostrarToast('Máximo 5 archivos permitidos', 'error');
+                input.value = '';
+                return;
+            }
+    
+            const videos = files.filter(f => f.type.startsWith('video/'));
+            if (videos.length > 1) {
+                mostrarToast('Solo se permite un video por reporte', 'error');
+                input.value = '';
+                return;
+            }
+            
+            // Validar tamaños y agregar a la colección
+            let todosValidos = true;
+            files.forEach((file, index) => {
+                const maxSize = file.type.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    mostrarToast(`${file.name} excede el tamaño máximo`, 'error');
+                    todosValidos = false;
+                } else {
+                    archivosSeleccionados.set(index + 1, file);
+                }
+            });
+            
+            if (!todosValidos) {
+                input.value = '';
+                archivosSeleccionados.clear();
+                return;
+            }
+            
+            // Mostrar información de archivos seleccionados
+            if (files.length > 0) {
+                divInfo.innerHTML = `<strong>${files.length} archivo(s) seleccionado(s):</strong><br>` +
+                    files.map(f => `• ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)`).join('<br>');
+                divInfo.style.color = 'var(--v700)';
+            } else {
+                divInfo.innerHTML = '';
+            }
+        }
+
+        function manejarSeleccionArchivo(input, index) {
+            const file = input.files[0];
+            const card = document.querySelector(`.file-upload-card[data-index="${index}"]`);
+            const preview = document.getElementById(`preview_${index}`);
+            
+            if (file) {
+                // Validar tamaño
+                const maxSize = file.type.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    mostrarToast('El archivo excede el tamaño máximo permitido', 'error');
+                    input.value = '';
+                    return;
+                }
+                
+                if (file.type.startsWith('video/')) {
+                    const videosActuales = Array.from(archivosSeleccionados.values())
+                        .filter(f => f.type.startsWith('video/')).length;
+                    if (videosActuales >= 1 && !archivosSeleccionados.has(index)) {
+                        mostrarToast('Solo se permite un video por reporte', 'error');
+                        input.value = '';
+                        return;
+                    }
+                }
+                
+                archivosSeleccionados.set(index, file);
+                card.classList.add('has-file');
+                
+                // Mostrar preview si es imagen
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        preview.src = e.target.result;
+                        preview.classList.add('show');
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    preview.classList.remove('show');
+                    card.querySelector('.file-icon').textContent = '🎥';
+                }
+                
+                card.querySelector('.file-label').textContent = file.name.substring(0, 15) + '...';
+            } else {
+                eliminarArchivo(index);
+            }
+        }
+
+        function eliminarArchivo(index) {
+            const card = document.querySelector(`.file-upload-card[data-index="${index}"]`);
+            const input = document.getElementById(`archivo_${index}`);
+            const preview = document.getElementById(`preview_${index}`);
+            
+            input.value = '';
+            archivosSeleccionados.delete(index);
+            card.classList.remove('has-file');
+            preview.classList.remove('show');
+            preview.src = '';
+            card.querySelector('.file-icon').textContent = '📁';
+            card.querySelector('.file-label').textContent = `Archivo ${index}`;
+        }
+
+        function describirEscala(selectId, destinoId) {
+            var sel = document.getElementById(selectId);
+            var opcion = sel.options[sel.selectedIndex];
+            document.getElementById(destinoId).textContent = opcion && opcion.dataset.desc ? opcion.dataset.desc : '';
+        }
+
+        function tipoReporteElegido() {
+            var r = document.querySelector('input[name="tipo_reporte"]:checked');
+            return r ? r.value : '';
+        }
+
+        function configurarContadorCaracteres(inputId, counterId) {
+            const input = document.getElementById(inputId);
+            const counter = document.getElementById(counterId);
+            
+            input.addEventListener('input', function() {
+                counter.textContent = this.value.length;
+            });
+        }
+
+        function configurarEventListeners() {
+            // Botón de ubicación
+            const btnUbicacion = document.getElementById('btnObtenerUbicacion');
+            if (btnUbicacion) {
+                btnUbicacion.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    obtenerUbicacion();
+                });
+            }
+            
+            // Formulario - capturar submit también
+            const form = document.getElementById('formReporteRapido');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Form submit interceptado');
+                    
+                    if (!validarFormulario()) {
+                        return;
+                    }
+                    
+                    enviarReporte(e);
+                });
+            }
+        }
+
+        function obtenerUbicacion() {
+            const btn = document.getElementById('btnObtenerUbicacion');
+            
+            if (!navigator.geolocation) {
+                mostrarToast('Tu navegador no soporta geolocalización', 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="sg-spinner" aria-hidden="true"></span><span>Obteniendo ubicación…</span>';
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    // Éxito
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    document.getElementById('latitud').value = lat;
+                    document.getElementById('longitud').value = lon;
+                    document.getElementById('precision').value = accuracy;
+                    
+                    document.getElementById('coordenadasTexto').textContent = 
+                        `Lat: ${lat.toFixed(6)}, Lon: ${lon.toFixed(6)}`;
+                    document.getElementById('precisionTexto').textContent = 
+                        `Precisión: ~${Math.round(accuracy)} metros`;
+                    
+                    document.getElementById('ubicacionInfo').classList.add('show');
+                    
+                    btn.innerHTML = SAGA.icono('ok') + '<span>Ubicación obtenida</span>';
+                    btn.classList.add('is-ok');
+                    ubicacionObtenida = true;
+                    
+                    mostrarToast('Ubicación GPS obtenida exitosamente', 'success');
+                },
+                function(error) {
+                    // Error
+                    let mensaje = 'Error obteniendo ubicación: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            mensaje += 'Permiso denegado';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            mensaje += 'Ubicación no disponible';
+                            break;
+                        case error.TIMEOUT:
+                            mensaje += 'Tiempo de espera agotado';
+                            break;
+                        default:
+                            mensaje += 'Error desconocido';
+                    }
+                    
+                    mostrarToast(mensaje, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = SAGA.icono('crosshair') + '<span>Obtener ubicación GPS</span>';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        async function enviarReporte(e) {
+            e.preventDefault();
+            console.log('enviarReporte() llamada');
+
+            // Validaciones
+            if (!validarFormulario()) {
+                console.log('Validación fallida, deteniendo');
+                return;
+            }
+            
+            // Al menos 1 área responsable
+            if (!validarDepartamentosResponsables()) {
+                console.log('Validación de departamentos fallida');
+                return;
+            }
+
+            console.log('Validación pasada, continuando...');
+
+            // Mostrar loading
+            document.getElementById('loadingOverlay').classList.add('show');
+            document.getElementById('btnSubmit').disabled = true;
+
+            try {
+                console.log('Preparando datos...');
+
+                // Preparar datos del formulario
+                const selectTipoProblema = document.getElementById('tipo_problema');
+                
+                // Obtener departamentos responsables seleccionados
+                const checkboxesResponsables = document.querySelectorAll('input[name="departamentos_responsables[]"]:checked');
+                const departamentosResponsables = Array.from(checkboxesResponsables).map(cb => cb.value);
+                
+                console.log('Departamentos responsables seleccionados:', departamentosResponsables);
+                
+                const datosReporte = {
+                    nombre: document.getElementById('nombre').value,
+                    telefono: document.getElementById('telefono').value,
+                    area: valorGerencia(),
+                    cargo: document.getElementById('cargo').value,
+                    id_tipo_problema: selectTipoProblema.value,
+                    tipo_problema_otro: null,
+                    lugar: document.getElementById('lugar').value || 'No especificado',
+                    descripcion: document.getElementById('descripcion').value,
+                    departamentos_responsables: departamentosResponsables,
+                    tipo_reporte: tipoReporteElegido()
+                };
+                CAMPOS_EXTRA.forEach(function (id) { datosReporte[id] = document.getElementById(id).value; });
+                
+                console.log('Datos completos del reporte:', datosReporte);
+
+
+                // Verificar que los departamentos se están enviando
+                console.log('Departamentos a enviar:');
+                console.log('   Responsables:', datosReporte.departamentos_responsables);
+                console.log('   Notificados:', datosReporte.departamentos_notificados);
+
+                // Enviar como JSON
+                const response = await fetch(`${API_BASE}/reportes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(datosReporte)
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Error al crear reporte');
+                }
+
+                const reporteId = result.id;
+                const folio = result.folio;
+
+                // Si hay ubicación GPS, guardarla
+                if (ubicacionObtenida) {
+                    try {
+                        const ubicacionData = {
+                            id_reporte: reporteId,
+                            latitud: document.getElementById('latitud').value,
+                            longitud: document.getElementById('longitud').value,
+                            precision_metros: document.getElementById('precision').value,
+                            metodo_obtencion: 'gps'
+                        };
+
+                        await fetch(`${API_BASE}/ubicacion`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(ubicacionData)
+                        });
+                    } catch (error) {
+                        console.error('Error guardando ubicación:', error);
+                    }
+                }
+
+                if (archivosSeleccionados.size > 0) {
+                    try {
+                        const archivosFormData = new FormData();
+                        archivosFormData.append('id_reporte', reporteId);
+                        archivosFormData.append('folio', folio);
+
+                        for (const [index, file] of archivosSeleccionados) {
+                            archivosFormData.append('archivos', file);
+                        }
+
+                        await fetch(`${API_BASE}/subir-archivos`, {
+                            method: 'POST',
+                            body: archivosFormData
+                        });
+                    } catch (error) {
+                        console.error('Error subiendo archivos:', error);
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Obtener enlaces de WhatsApp
+                try {
+                    const whatsappResponse = await fetch(`${API_BASE}/reportes/${folio}/whatsapp`);
+                    const whatsappResult = await whatsappResponse.json();
+                    
+                    // Ocultar loading
+                    document.getElementById('loadingOverlay').classList.remove('show');
+                    
+                    // Mostrar éxito con enlaces de WhatsApp
+                    mostrarExito(folio, whatsappResult.enlaces || []);
+                } catch (error) {
+                    console.error('Error obteniendo enlaces WhatsApp:', error);
+                    // Ocultar loading
+                    document.getElementById('loadingOverlay').classList.remove('show');
+                    // Mostrar éxito sin enlaces si hay error
+                    mostrarExito(folio, []);
+                }
+
+                setTimeout(() => {
+                    limpiarFormulario();
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error enviando reporte:', error);
+                document.getElementById('loadingOverlay').classList.remove('show');
+                document.getElementById('btnSubmit').disabled = false;
+                mostrarToast(error.message || 'Error al enviar el reporte', 'error');
+            }
+        }
+
+        function validarFormulario() {
+            console.log('Validando formulario...');
+
+            // Tipo de reporte (obligatorio)
+            if (!tipoReporteElegido()) {
+                mostrarToast('Selecciona qué quieres reportar (condición insegura, incidente, buena práctica…)', 'error');
+                var primero = document.querySelector('input[name="tipo_reporte"]');
+                if (primero) primero.focus();
+                return false;
+            }
+
+            // Validar tipo de problema
+            const tipoProblem = document.getElementById('tipo_problema').value;
+            if (!tipoProblem) {
+                mostrarToast('Debe seleccionar el tipo de problema', 'error');
+                return false;
+            }
+
+            if (tipoProblem === 'Otro' && !document.getElementById('tipo_problema_otro').value.trim()) {
+                mostrarToast('Debe especificar el tipo de problema', 'error');
+                return false;
+            }
+
+            // Validar descripción
+            const descripcion = document.getElementById('descripcion').value.trim();
+            if (!descripcion) {
+                mostrarToast('La descripción es requerida', 'error');
+                return false;
+            }
+
+            if (descripcion.length < 10) {
+                mostrarToast('La descripción debe tener al menos 10 caracteres', 'error');
+                return false;
+            }
+
+            // Validar ubicación (ahora obligatoria)
+            const lugar = document.getElementById('lugar').value.trim();
+            if (!lugar) {
+                mostrarToast('La ubicación del problema es requerida', 'error');
+                return false;
+            }
+
+            if (lugar.length < 5) {
+                mostrarToast('La ubicación debe tener al menos 5 caracteres', 'error');
+                return false;
+            }
+
+            console.log(' Validación exitosa');
+            return true;
+        }
+
+        function mostrarExito(folio, enlaces) {
+            console.log(' mostrarExito llamada con folio:', folio);
+            folioActual = folio;
+            
+            document.getElementById('folioGenerado').textContent = folio;
+
+            const linksContainer = document.getElementById('whatsappLinks');
+            linksContainer.innerHTML = '';
+
+            // Generar enlaces pero mantenerlos ocultos inicialmente
+            if (enlaces && enlaces.length > 0) {
+                enlaces.forEach(enlace => {
+                    const link = document.createElement('a');
+                    link.className = 'whatsapp-link';
+                    link.href = enlace.enlace;
+                    link.target = '_blank';
+                    link.rel = 'noopener';
+                    link.innerHTML = SAGA.icono('message') + '<span></span>' + SAGA.icono('external');
+                    link.querySelector('span').textContent = `Notificar a ${enlace.departamento}`;
+                    linksContainer.appendChild(link);
+                });
+            } else {
+                linksContainer.innerHTML = '<p class="sg-help">No se pudieron generar los enlaces de WhatsApp.</p>';
+            }
+
+            // Asegurar que el contenedor de WhatsApp esté oculto al inicio
+            document.getElementById('whatsappLinksContainer').style.display = 'none';
+
+            document.getElementById('whatsappModal').classList.add('show');
+            mostrarToast(`Reporte ${folio} creado exitosamente`, 'success');
+        }
+
+        function configurarToggleWhatsApp() {
+            const btnToggle = document.getElementById('btnToggleWhatsApp');
+            const collapsibleArea = document.getElementById('whatsappCollapsibleArea');
+            const toggleIcon = btnToggle.querySelector('.toggle-icon');
+            
+            // Remover event listeners anteriores si existen
+            const newBtnToggle = btnToggle.cloneNode(true);
+            btnToggle.parentNode.replaceChild(newBtnToggle, btnToggle);
+            
+            newBtnToggle.addEventListener('click', function() {
+                const isHidden = collapsibleArea.style.display === 'none';
+                
+                if (isHidden) {
+                    collapsibleArea.style.display = 'block';
+                    const newToggleIcon = this.querySelector('.toggle-icon');
+                    newToggleIcon.textContent = '▲';
+                    newToggleIcon.classList.add('expanded');
+                } else {
+                    collapsibleArea.style.display = 'none';
+                    const newToggleIcon = this.querySelector('.toggle-icon');
+                    newToggleIcon.textContent = '▼';
+                    newToggleIcon.classList.remove('expanded');
+                }
+            });
+        }
+
+        function cerrarWhatsAppModal() {
+            console.log(' cerrarWhatsAppModal ejecutada');
+            document.getElementById('whatsappModal').classList.remove('show');
+            console.log('Redirigiendo a /reportes-rapidos');
+            window.location.href = '/reportes-rapidos';
+        }
+
+        
+        function limpiarFormulario() {
+            document.getElementById('formReporteRapido').reset();
+            document.getElementById('area_otra').hidden = true;
+            
+            // Limpiar selección de departamentos
+            departamentosSeleccionados.clear();
+            document.querySelectorAll('.departamento-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Limpiar archivos
+            archivosSeleccionados.clear();
+            const inputArchivos = document.getElementById('archivos_input');
+            if (inputArchivos) inputArchivos.value = '';
+            const vistaPrevia = document.getElementById('vista_previa_archivos');
+            if (vistaPrevia) vistaPrevia.innerHTML = '';
+            
+            // Limpiar ubicación
+            ubicacionObtenida = false;
+            document.getElementById('ubicacionInfo').classList.remove('show');
+            const btnUbicacion = document.getElementById('btnObtenerUbicacion');
+            btnUbicacion.disabled = false;
+            btnUbicacion.innerHTML = SAGA.icono('crosshair') + '<span>Obtener ubicación GPS</span>';
+            btnUbicacion.classList.remove('is-ok');
+            
+            // Limpiar contadores
+            document.getElementById('lugar_counter').textContent = '0';
+            document.getElementById('descripcion_counter').textContent = '0';
+            document.getElementById('sugerencia_counter').textContent = '0';
+
+            // Datos operacionales y opinión
+            document.getElementById('plegableOperacion').open = false;
+            document.getElementById('descProbabilidad').textContent = '';
+            document.getElementById('descSeveridad').textContent = '';
+            
+            // Ocultar campo otro
+            document.getElementById('tipo_problema_otro_container').style.display = 'none';
+            
+            // Habilitar botón de envío
+            document.getElementById('btnSubmit').disabled = false;
+        }
+
+        function mostrarToast(mensaje, tipo = 'info') {
+            SAGA.toast(mensaje, tipo);
+        }
+
+        function mostrarError(mensaje) {
+            mostrarToast(mensaje, 'error');
+        }
+
+        // Prevenir envío accidental con Enter en campos de texto
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+            }
+        });
+
+        // Auto-guardar borrador en localStorage
+        let autoSaveInterval;
+        function iniciarAutoGuardado() {
+            autoSaveInterval = setInterval(() => {
+                const borrador = {
+                    nombre: document.getElementById('nombre').value,
+                    telefono: document.getElementById('telefono').value,
+                    area: document.getElementById('area').value,
+                    area_otra: document.getElementById('area_otra').value,
+                    cargo: document.getElementById('cargo').value,
+                    tipo_problema: document.getElementById('tipo_problema').value,
+                    tipo_problema_otro: document.getElementById('tipo_problema_otro').value,
+                    lugar: document.getElementById('lugar').value,
+                    descripcion: document.getElementById('descripcion').value,
+                    departamentos: Array.from(departamentosSeleccionados),
+                    tipo_reporte: tipoReporteElegido(),
+                    extra: CAMPOS_EXTRA.reduce(function (o, id) { o[id] = document.getElementById(id).value; return o; }, {}),
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem('rsm_borrador', JSON.stringify(borrador));
+            }, 30000); // Cada 30 segundos
+        }
+
+        function cargarBorrador() {
+            const borrador = localStorage.getItem('rsm_borrador');
+            if (borrador) {
+                const data = JSON.parse(borrador);
+                const ahora = Date.now();
+                const dosHoras = 2 * 60 * 60 * 1000;
+                
+                // Si el borrador tiene menos de 2 horas
+                if (ahora - data.timestamp < dosHoras) {
+                    if (confirm('Se encontró un borrador guardado. ¿Desea restaurarlo?')) {
+                        document.getElementById('nombre').value = data.nombre || '';
+                        document.getElementById('telefono').value = data.telefono || '';
+                        if (data.area) {
+                            const sel = document.getElementById('area');
+                            sel.value = data.area;
+                            if (sel.value !== data.area) sel.dataset.pendiente = data.area;
+                            document.getElementById('area_otra').value = data.area_otra || '';
+                            document.getElementById('area_otra').hidden = data.area !== '__otra';
+                        }
+                        document.getElementById('cargo').value = data.cargo || '';
+                        document.getElementById('tipo_problema').value = data.tipo_problema || '';
+                        document.getElementById('tipo_problema_otro').value = data.tipo_problema_otro || '';
+                        document.getElementById('lugar').value = data.lugar || '';
+                        document.getElementById('descripcion').value = data.descripcion || '';
+                        if (data.tipo_reporte) {
+                            var radio = document.querySelector('input[name="tipo_reporte"][value="' + CSS.escape(data.tipo_reporte) + '"]');
+                            if (radio) radio.checked = true;
+                        }
+                        CAMPOS_EXTRA.forEach(function (id) {
+                            if (data.extra && data.extra[id]) document.getElementById(id).value = data.extra[id];
+                        });
+                        if (window.SAGABuscable) SAGABuscable.sincronizar();
+                        ESCALAS.forEach(function (par) { describirEscala(par[0], par[1]); });
+                        document.getElementById('sugerencia_counter').textContent = document.getElementById('sugerencia_prevencion').value.length;
+
+                        // Restaurar departamentos
+                        data.departamentos.forEach(id => {
+                            const checkbox = document.getElementById(`dept_${id}`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                                actualizarSeleccionDepartamento(id, true);
+                            }
+                        });
+                        
+                        // Actualizar contadores
+                        document.getElementById('lugar_counter').textContent = data.lugar.length;
+                        document.getElementById('descripcion_counter').textContent = data.descripcion.length;
+                        
+                        mostrarToast('Borrador restaurado', 'success');
+                    } else {
+                        localStorage.removeItem('rsm_borrador');
+                    }
+                } else {
+                    localStorage.removeItem('rsm_borrador');
+                }
+            }
+        }
+        
+        // Gestión de Departamentos
+        // ========================
+        let todosDepartamentos = []; // Variable global para almacenar departamentos
+        
+        //Cargar TODOS los departamentos disponibles
+        async function cargarTodosDepartamentos() {
+            try {
+                console.log('Cargando todos los departamentos...');
+                
+                const response = await fetch('/api/departamentos');
+                const data = await response.json();
+                
+                if (!data.success || !data.departamentos) {
+                    throw new Error('No se pudieron cargar los departamentos');
+                }
+                
+                // Forzar ordenamiento por ID (evitar orden alfabético)
+                todosDepartamentos = data.departamentos.sort((a, b) => a.id - b.id);
+                console.log(` ${todosDepartamentos.length} departamentos cargados en orden por ID`);
+                
+                // Generar checkboxes vacíos
+                generarCheckboxesDepartamentos();
+                llenarGerencias(todosDepartamentos);
+                
+            } catch (error) {
+                console.error('Error cargando departamentos:', error);
+                mostrarError('No se pudieron cargar los departamentos disponibles');
+            }
+        }
+        
+        //Cargar tipos de problemas desde la base de datos
+        async function cargarTiposProblemas() {
+            try {
+                console.log('Cargando tipos de problemas...');
+                
+                const response = await fetch('/api/tipos-problemas/activos');
+                const result = await response.json();
+                
+                if (!result.success || !result.data) {
+                    throw new Error('No se pudieron cargar los tipos de problemas');
+                }
+                
+                const selectTipo = document.getElementById('tipo_problema');
+                
+                // Limpiar opciones existentes
+                selectTipo.innerHTML = '<option value="">Seleccione la categoría del hallazgo</option>';
+                
+                // Agregar opciones dinámicamente
+                result.data.forEach(tipo => {
+                    const option = document.createElement('option');
+                    option.value = tipo.id;
+                    option.textContent = tipo.nombre;
+                    option.dataset.codigo = tipo.codigo;
+                    selectTipo.appendChild(option);
+                });
+                
+                console.log(`${result.data.length} tipos de problemas cargados`);
+                
+            } catch (error) {
+                console.error('Error cargando tipos de problemas:', error);
+                mostrarError('No se pudieron cargar los tipos de problemas. Por favor, recargue la página.');
+            }
+        }
+        
+        //Generar checkboxes para todos los departamentos
+        function generarCheckboxesDepartamentos() {
+            const containerResp = document.getElementById('departamentosResponsablesContainer');
+            // const containerNotif = document.getElementById('departamentosNotificadosContainer');
+            
+            if (!containerResp) {
+                console.error(' Contenedor de checkboxes no encontrado');
+                return;
+            }
+            
+            // Limpiar contenedor
+            containerResp.innerHTML = '';
+            // containerNotif.innerHTML = '';
+            
+            // Calcular punto medio para dividir en dos columnas
+            const total = todosDepartamentos.length;
+            const puntoMedio = Math.ceil(total / 2);
+            
+            // Dividir en dos grupos
+            const primeraColumna = todosDepartamentos.slice(0, puntoMedio);
+            const segundaColumna = todosDepartamentos.slice(puntoMedio);
+            
+            // Crear contenedores de columna para RESPONSABLES
+            const colResp1 = document.createElement('div');
+            colResp1.style.display = 'flex';
+            colResp1.style.flexDirection = 'column';
+            colResp1.style.gap = '10px';
+            
+            const colResp2 = document.createElement('div');
+            colResp2.style.display = 'flex';
+            colResp2.style.flexDirection = 'column';
+            colResp2.style.gap = '10px';
+            
+            // Crear contenedores de columna para NOTIFICADOS
+            const colNotif1 = document.createElement('div');
+            colNotif1.style.display = 'flex';
+            colNotif1.style.flexDirection = 'column';
+            colNotif1.style.gap = '10px';
+            
+            const colNotif2 = document.createElement('div');
+            colNotif2.style.display = 'flex';
+            colNotif2.style.flexDirection = 'column';
+            colNotif2.style.gap = '10px';
+            
+            // Llenar primera columna
+            primeraColumna.forEach(dept => {
+                colResp1.appendChild(crearCheckboxDepartamento(dept, 'responsables'));
+                colNotif1.appendChild(crearCheckboxDepartamento(dept, 'notificados'));
+            });
+            
+            // Llenar segunda columna
+            segundaColumna.forEach(dept => {
+                colResp2.appendChild(crearCheckboxDepartamento(dept, 'responsables'));
+                colNotif2.appendChild(crearCheckboxDepartamento(dept, 'notificados'));
+            });
+            
+            // Agregar columnas a los contenedores
+            containerResp.appendChild(colResp1);
+            containerResp.appendChild(colResp2);
+            const containerNotif = document.getElementById('departamentosNotificadosContainer');
+            if (containerNotif) {
+                containerNotif.appendChild(colNotif1);
+                containerNotif.appendChild(colNotif2);
+            }
+            
+            console.log('Checkboxes generados');
+        }
+        
+        //Crear elemento checkbox para un departamento
+        function crearCheckboxDepartamento(dept, tipo) {
+            const label = document.createElement('label');
+            label.className = 'checkbox-item';
+            label.id = `${tipo}_${dept.codigo}`;
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = `departamentos_${tipo}[]`;
+            checkbox.value = dept.codigo;
+            checkbox.id = `chk_${tipo}_${dept.codigo}`;
+            
+            // SIN ICONO - Solo texto
+            const labelText = document.createElement('span');
+            labelText.className = 'checkbox-label';
+            labelText.textContent = dept.nombre;
+            
+            label.appendChild(checkbox);
+            label.appendChild(labelText);
+            
+            return label;
+        }
+        
+        //Cargar departamentos sugeridos según tipo de problema
+        async function cargarDepartamentosSugeridos() {
+            const selectTipo = document.getElementById('tipo_problema');
+            const tipoProblema = selectTipo ? selectTipo.value : '';
+            
+            if (!tipoProblema) {
+                console.log('No hay tipo de problema seleccionado');
+                limpiarSugerenciasDepartamentos();
+                return;
+            }
+            
+            try {
+                console.log(' Cargando sugerencias para:', tipoProblema);
+                
+                const response = await fetch(`/api/tipos-problema/${encodeURIComponent(tipoProblema)}/departamentos-sugeridos`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('No se pudieron cargar las sugerencias');
+                }
+                
+                console.log('Sugerencias recibidas:');
+                console.log('   Responsables:', data.responsables);
+                console.log('   Notificados:', data.notificados);
+                
+                // Limpiar selecciones actuales
+                limpiarSugerenciasDepartamentos();
+                
+                // Aplicar sugerencias de RESPONSABLES
+                data.responsables.forEach(codigo => {
+                    const label = document.getElementById(`responsables_${codigo}`);
+                    const checkbox = document.getElementById(`chk_responsables_${codigo}`);
+                    
+                    if (checkbox && label) {
+                        checkbox.checked = true;
+                        label.classList.add('sugerido');
+                        console.log(`  Responsable sugerido: ${codigo}`);
+                    }
+                });
+                
+                // Aplicar sugerencias de NOTIFICADOS
+                data.notificados.forEach(codigo => {
+                    const label = document.getElementById(`notificados_${codigo}`);
+                    const checkbox = document.getElementById(`chk_notificados_${codigo}`);
+                    
+                    if (checkbox && label) {
+                        checkbox.checked = true;
+                        checkbox.disabled = true;
+                        label.classList.add('precargado');
+                        console.log(`  Notificado bloqueado: ${codigo}`);
+                        
+                        // Crear hidden input para enviar valor aunque esté disabled
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        //hidden.name = 'departamentos_notificados[]';
+                        hidden.value = codigo;
+                        hidden.className = 'hidden-notificado';
+                        label.appendChild(hidden);
+                    }
+                });
+                
+                console.log('Sugerencias aplicadas correctamente');
+                
+            } catch (error) {
+                console.error(' Error cargando sugerencias:', error);
+                mostrarError('No se pudieron cargar las sugerencias de departamentos');
+            }
+        }
+        
+        //Limpiar todas las sugerencias y selecciones
+        function limpiarSugerenciasDepartamentos() {
+            console.log('Limpiando sugerencias...');
+            
+            // Limpiar RESPONSABLES
+            document.querySelectorAll('#departamentosResponsablesContainer .checkbox-item').forEach(label => {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+                label.classList.remove('sugerido');
+            });
+            
+            // Limpiar NOTIFICADOS
+            // FUNCIONALIDAD DE DEPARTAMENTOS NOTIFICADOS DESHABILITADA
+            /*
+            // Limpiar NOTIFICADOS
+            document.querySelectorAll('#departamentosNotificadosContainer .checkbox-item').forEach(label => {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = false; // Desbloquear
+                }
+                label.classList.remove('precargado');
+                
+                // Eliminar hidden inputs
+                const hiddens = label.querySelectorAll('.hidden-notificado');
+                hiddens.forEach(h => h.remove());
+            });
+            */
+            
+            console.log('Sugerencias limpiadas');
+        }
+        
+        //Validar que al menos 1 responsable esté seleccionado
+        function validarDepartamentosResponsables() {
+            const checkboxes = document.querySelectorAll('input[name="departamentos_responsables[]"]:checked');
+            
+            if (checkboxes.length === 0) {
+                alert('Debe seleccionar al menos un departamento responsable');
+                return false;
+            }
+            
+            console.log(` ${checkboxes.length} departamentos responsables seleccionados`);
+            return true;
+        }
+
+        // Iniciar auto-guardado y cargar borrador al iniciar
+        setTimeout(() => {
+            cargarBorrador();
+            iniciarAutoGuardado();
+        }, 1000);
+        
+
+    </script>
+</body>
+</html>

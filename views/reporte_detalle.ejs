@@ -1,0 +1,993 @@
+<%
+    const estadosTexto = {
+        'A': 'Generado',
+        'B': 'Enterado',
+        'C': 'En atención',
+        'D': 'Resuelto',
+        'E': 'Duplicado',
+        'F': 'No requiere atención'
+    };
+    const areas = reporte.departamentos_nombres
+        ? reporte.departamentos_nombres.split(',').map(d => d.trim()).filter(Boolean)
+        : [];
+-%>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte <%= reporte.folio %> · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <link rel="stylesheet" href="/css/reporte.css">
+    <script src="/js/sms-graficas.js"></script>
+    <style>
+        .sesion-aviso { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+        .gestion-cargando { padding: 28px; text-align: center; }
+        .form-grid { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+        .form-grid .ancho { grid-column: 1 / -1; }
+        @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+        .tipo-opc { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tipo-opc label { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--n200); border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .tipo-opc label:has(input:checked) { border-color: var(--v600); background: var(--v50); }
+        .dialogo-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        .sg-dialog--ancho { max-width: 720px; }
+        .estado-atencion dd .estado-badge { margin-top: 2px; }
+        .historial-riesgo { margin-top: 16px; border-top: 1px solid var(--n100); padding-top: 12px; }
+        .historial-riesgo summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--v700); }
+        .historial-riesgo ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; font-size: 13px; color: var(--n700); }
+        .contador-car { font-size: 12px; color: var(--n500); text-align: right; }
+        .opinion { display: grid; gap: 12px; }
+        .opinion dl { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+        .opinion dt { font-size: 12px; font-weight: 600; color: var(--n500); text-transform: uppercase; letter-spacing: .04em; }
+        .opinion dd { margin: 2px 0 0; font-size: 14px; color: var(--n900); }
+        .percepcion { margin-bottom: 12px; padding: 10px 12px; background: var(--n50); border: 1px dashed var(--n200); border-radius: 8px; font-size: 13px; color: var(--n700); }
+        .guia-sev { margin-top: 14px; border-top: 1px solid var(--n100); padding-top: 12px; }
+        .guia-sev summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--v700); }
+        .guia-sev select { margin-top: 10px; max-width: 360px; }
+        .guia-sev ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--n700); }
+        .guia-sev li b { display: inline-block; min-width: 128px; color: var(--n900); }
+        .guia-sev .sg-help { margin-top: 8px; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }
+    ],
+    extra: '<button type="button" class="btn btn-secondary" id="btnImprimir" title="Imprimir"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg><span class="lbl">Imprimir</span></button>'
+}) %>
+
+    <main class="sg-main container">
+        <div class="sg-wrap sg-wrap--mid">
+            <header class="rep-head header">
+                <span class="sg-kicker">Reporte de hallazgo</span>
+                <h1>
+                    <span>Reporte <span class="mono folio"><%= reporte.folio %></span></span>
+                    <span id="estadoCabecera">
+                    <% if (reporte.estado) { %>
+                    <span class="estado-badge estado-<%= reporte.estado %>"><%= reporte.estado %> · <%= estadosTexto[reporte.estado] || reporte.estado %></span>
+                    <% } %>
+                    </span>
+                </h1>
+                <div class="rep-meta fecha">
+                    <span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-calendar"/></svg>
+                        <%= new Date(reporte.fecha).toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+                    </span>
+                    <% if (reporte.hora) { %>
+                    <span>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-clock"/></svg>
+                        <%= String(reporte.hora).substring(0, 5) %> h
+                    </span>
+                    <% } %>
+                    <span id="metaRiesgo"></span>
+                </div>
+            </header>
+
+            <div class="sesion-aviso no-print" id="sesionAviso" hidden></div>
+
+            <div class="rep-layout content">
+                <div class="rep-main">
+                    <!-- Etapas de atención -->
+                    <section class="sg-card section" aria-labelledby="tEtapas">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tEtapas">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-activity"/></svg>
+                                Etapas de atención
+                            </h2>
+                            <span id="etapasSemaforo"></span>
+                        </div>
+                        <div class="sg-card__body" id="etapasCuerpo"><span class="skel skel--media"></span><span class="skel"></span></div>
+                    </section>
+
+                    <!-- Descripción -->
+                    <section class="sg-card section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>
+                                Descripción del hallazgo
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="texto-largo descripcion"><%= reporte.descripcion %></div>
+                        </div>
+                    </section>
+
+                    <!-- Opinión de quien reportó (referencia, no es la evaluación oficial) -->
+                    <% if (reporte.percepcion_texto || reporte.sugerencia_prevencion) { %>
+                    <section class="sg-card section" aria-labelledby="tOpinion">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tOpinion">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-message"/></svg>
+                                Opinión de quien reportó
+                            </h2>
+                        </div>
+                        <div class="sg-card__body opinion">
+                            <% if (reporte.percepcion_texto) { %>
+                            <dl>
+                                <div><dt>Frecuencia</dt><dd><%= reporte.percepcion_texto.probabilidad || 'Sin opinión' %></dd></div>
+                                <div><dt>Gravedad</dt><dd><%= reporte.percepcion_texto.severidad || 'Sin opinión' %></dd></div>
+                            </dl>
+                            <% } %>
+                            <% if (reporte.sugerencia_prevencion) { %>
+                            <div>
+                                <span class="dato-etq">¿Qué podemos hacer para prevenirlo?</span>
+                                <div class="texto-largo"><%= reporte.sugerencia_prevencion %></div>
+                            </div>
+                            <% } %>
+                            <p class="sg-help">Es la percepción de quien reportó; la evaluación oficial del riesgo la hace supervisión con la matriz.</p>
+                        </div>
+                    </section>
+                    <% } %>
+
+                    <!-- Ubicación -->
+                    <section class="sg-card section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pin"/></svg>
+                                Ubicación
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="texto-largo"><%= reporte.lugar %></div>
+
+                            <% if (ubicacion && ubicacion.latitud && ubicacion.longitud) { %>
+                            <div class="gps-box ubicacion-section">
+                                <dl class="gps-coords">
+                                    <div>
+                                        <dt class="dato-etq">Latitud</dt>
+                                        <dd><%= ubicacion.latitud %></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="dato-etq">Longitud</dt>
+                                        <dd><%= ubicacion.longitud %></dd>
+                                    </div>
+                                    <% if (ubicacion.precision_metros) { %>
+                                    <div>
+                                        <dt class="dato-etq">Precisión</dt>
+                                        <dd>± <%= Math.round(ubicacion.precision_metros) %> m</dd>
+                                    </div>
+                                    <% } %>
+                                </dl>
+                                <a href="https://maps.google.com/?q=<%= ubicacion.latitud %>,<%= ubicacion.longitud %>"
+                                   target="_blank" rel="noopener" class="btn btn-secondary btn-sm mapa-btn">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-map"/></svg>
+                                    Ver en Google Maps
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-external"/></svg>
+                                </a>
+                            </div>
+                            <% } %>
+                        </div>
+                    </section>
+
+                    <!-- Evidencia -->
+                    <% if (archivos && archivos.length > 0) { %>
+                    <section class="sg-card section imagenes-section">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title section-title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-image"/></svg>
+                                Evidencia gráfica
+                                <span class="cuenta">(<%= archivos.length %>)</span>
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="galeria galeria-imagenes">
+                                <% archivos.forEach(function(archivo, index) { %>
+                                <a href="/uploads/<%= archivo.ruta_optimizada || archivo.ruta_original %>" target="_blank" rel="noopener" class="imagen-link" aria-label="Ver imagen <%= index + 1 %> completa">
+                                    <img src="/uploads/<%= archivo.ruta_thumbnail || archivo.ruta_optimizada %>"
+                                         alt="Evidencia <%= index + 1 %> del reporte <%= reporte.folio %>"
+                                         class="imagen-thumbnail"
+                                         loading="lazy"
+                                         onerror="if(!this.dataset.r){this.dataset.r=1;this.src='/uploads/<%= archivo.ruta_original %>';}else{this.onerror=null;this.parentNode.classList.add('rota');}">
+                                    <span class="zoom" aria-hidden="true">
+                                        <svg class="ic"><use href="/img/icons.svg#i-zoom-in"/></svg>
+                                        Ver completa
+                                    </span>
+                                    <span class="num"><%= index + 1 %></span>
+                                </a>
+                                <% }); %>
+                            </div>
+                        </div>
+                    </section>
+                    <% } %>
+
+                    <!-- Evaluación de riesgo -->
+                    <section class="sg-card section" id="riesgo" aria-labelledby="tRiesgo">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tRiesgo">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>
+                                Evaluación de riesgo
+                            </h2>
+                            <div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+                                <button type="button" class="btn btn-secondary btn-sm" id="btnEvaluar" hidden>
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-crosshair"/></svg><span>Evaluar riesgo inicial</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="btnResidual" hidden>
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg><span>Registrar riesgo residual</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="sg-card__body" id="riesgoCuerpo"><div class="gestion-cargando"><span class="sg-spinner"></span></div></div>
+                    </section>
+
+                    <!-- Acciones correctivas -->
+                    <section class="sg-card section" id="acciones" aria-labelledby="tAcciones">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tAcciones">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-checklist"/></svg>
+                                Acciones correctivas y preventivas
+                                <span class="cuenta" id="accionesCuenta"></span>
+                            </h2>
+                            <button type="button" class="btn btn-primary btn-sm no-print" id="btnNuevaAccion" hidden>
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Registrar acción
+                            </button>
+                        </div>
+                        <div class="sg-card__body" id="accionesCuerpo"><div class="gestion-cargando"><span class="sg-spinner"></span></div></div>
+                    </section>
+
+                    <!-- Línea de tiempo -->
+                    <section class="sg-card sg-card--feat section" aria-labelledby="tLinea">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tLinea">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>
+                                Historial completo
+                                <span class="cuenta" id="lineaCuenta"></span>
+                            </h2>
+                            <a class="btn btn-ghost btn-sm no-print" href="/reportes/<%= encodeURIComponent(reporte.folio) %>/historial">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-external"/></svg>Ver con evidencias
+                            </a>
+                        </div>
+                        <div class="sg-card__body" id="lineaCuerpo"><div class="gestion-cargando"><span class="sg-spinner"></span></div></div>
+                    </section>
+                </div>
+
+                <!-- Columna lateral -->
+                <aside class="rep-aside">
+                    <section class="sg-card sg-card--feat">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-activity"/></svg>
+                                Estado de atención
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <dl class="ficha estado-atencion" id="estadoAtencion">
+                                <div><dt>Estatus actual</dt><dd><span class="estado-badge estado-<%= reporte.estado %>"><%= estadosTexto[reporte.estado] || reporte.estado %></span></dd></div>
+                            </dl>
+                        </div>
+                    </section>
+
+                    <section class="sg-card" id="compromiso" aria-labelledby="tCompromiso">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tCompromiso">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-calendar"/></svg>
+                                Responsable y fecha compromiso
+                            </h2>
+                        </div>
+                        <div class="sg-card__body" id="compromisoCuerpo"><span class="skel skel--media"></span><span class="skel"></span></div>
+                    </section>
+
+                    <section class="sg-card" id="zona" aria-labelledby="tZona" hidden>
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tZona">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-map"/></svg>
+                                Zona del aeropuerto
+                            </h2>
+                        </div>
+                        <div class="sg-card__body" id="zonaCuerpo"></div>
+                    </section>
+
+                    <section class="sg-card">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-checklist"/></svg>
+                                Datos del reporte
+                            </h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <dl class="ficha info-grid" id="fichaDatos">
+                                <div>
+                                    <dt>Folio</dt>
+                                    <dd class="mono"><%= reporte.folio %></dd>
+                                </div>
+                                <div>
+                                    <dt>Tipo de reporte</dt>
+                                    <dd><% if (reporte.tipo_reporte_nombre) { %><%= reporte.tipo_reporte_nombre %><% } else { %><span class="nd">Sin clasificar</span><% } %></dd>
+                                </div>
+                                <div>
+                                    <dt>Categoría del hallazgo</dt>
+                                    <dd><%= reporte.tipo_problema %></dd>
+                                </div>
+                                <% if (reporte.vuelo || reporte.matricula || reporte.posicion) { %>
+                                <div>
+                                    <dt>Vuelo · matrícula · posición</dt>
+                                    <dd class="mono"><%= [reporte.vuelo, reporte.matricula, reporte.posicion].map(function (v) { return v || '—'; }).join(' · ') %></dd>
+                                </div>
+                                <% } %>
+                                <% if (reporte.gse_tipo || reporte.gse_numero) { %>
+                                <div>
+                                    <dt>Equipo de apoyo (GSE)</dt>
+                                    <dd><%= [reporte.gse_tipo, reporte.gse_numero].filter(Boolean).join(' · ') %></dd>
+                                </div>
+                                <% } %>
+                                <div>
+                                    <dt>Áreas notificadas</dt>
+                                    <dd class="departamentos">
+                                        <% if (areas.length) { %>
+                                        <ul class="lista-areas">
+                                            <% areas.forEach(dept => { %>
+                                            <li><%= dept %></li>
+                                            <% }) %>
+                                        </ul>
+                                        <% } else { %>
+                                        <span class="nd">Sin área asignada</span>
+                                        <% } %>
+                                    </dd>
+                                </div>
+                                <!-- Datos de quien reportó: solo con sesión (se agregan desde el navegador) -->
+                            </dl>
+                        </div>
+                    </section>
+
+                    <a class="btn btn-primary btn-block no-print" href="/reportes/<%= encodeURIComponent(reporte.folio) %>/historial">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>
+                        Ver historial de seguimiento
+                    </a>
+                    <button type="button" class="btn btn-ghost btn-ghost-peligro btn-block no-print" id="btnEliminar" hidden>
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trash"/></svg>
+                        Eliminar reporte
+                    </button>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- Diálogo genérico (riesgo, acciones, confirmaciones) -->
+    <div class="sg-backdrop" id="dlg" aria-hidden="true">
+        <div class="sg-dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitulo">
+            <div class="sg-dialog__head">
+                <div>
+                    <span class="sg-eyebrow" id="dlgEyebrow">Reporte <%= reporte.folio %></span>
+                    <h2 class="sg-dialog__title" id="dlgTitulo">—</h2>
+                </div>
+                <button type="button" class="btn btn-ghost btn-icon" data-cerrar aria-label="Cerrar">
+                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-x"/></svg>
+                </button>
+            </div>
+            <div class="sg-dialog__body">
+                <form id="dlgForm" novalidate></form>
+            </div>
+        </div>
+    </div>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var FOLIO = <%- JSON.stringify(String(reporte.folio)).replace(/</g, '\\u003c') %>;
+        // Opinión de quien reportó, ya con los nombres de la escala (la arma el servidor)
+        var PERCEPCION = <%- JSON.stringify(reporte.percepcion_texto || null).replace(/</g, '\\u003c') %>;
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var datos = null;
+        var deptos = [];
+
+        $('btnImprimir').addEventListener('click', function () { window.print(); });
+        $('btnEliminar').addEventListener('click', function () {
+            SMS.confirmarEliminacion(FOLIO).then(function (ok) { if (ok) setTimeout(function () { location.href = '/reportes/general'; }, 900); });
+        });
+
+        // ------------------------------------------------------------ diálogo
+        var dlg = $('dlg'), dlgForm = $('dlgForm'), dlgAnterior = null, dlgResolver = null;
+        function abrirDialogo(cfg) {
+            dlgAnterior = document.activeElement;
+            dlg.querySelector('.sg-dialog').classList.toggle('sg-dialog--ancho', !!cfg.ancho);
+            $('dlgTitulo').textContent = cfg.titulo;
+            dlgForm.innerHTML = cfg.html +
+                '<div class="sg-banner crit" id="dlgError" role="alert" hidden>' + ic('crit') + '<span></span></div>' +
+                '<div class="dialogo-pie"><button type="button" class="btn btn-secondary" data-cerrar>Cancelar</button>' +
+                '<button type="submit" class="btn ' + (cfg.peligro ? 'btn-danger' : 'btn-primary') + '" id="dlgOk">' + (cfg.icono ? ic(cfg.icono) : '') + '<span>' + esc(cfg.boton || 'Guardar') + '</span></button></div>';
+            dlg.classList.add('show');
+            dlg.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            if (cfg.alAbrir) cfg.alAbrir(dlgForm);
+            var primero = dlgForm.querySelector('input:not([type=hidden]), textarea, select, button.celda');
+            setTimeout(function () { (primero || $('dlgOk')).focus(); }, 30);
+            return new Promise(function (res) {
+                dlgResolver = res;
+                dlgForm.onsubmit = async function (e) {
+                    e.preventDefault();
+                    var err = $('dlgError');
+                    err.hidden = true;
+                    var ok = $('dlgOk');
+                    ok.disabled = true;
+                    var etiqueta = ok.innerHTML;
+                    ok.innerHTML = '<span class="sg-spinner sg-spinner--sm"></span><span>Guardando…</span>';
+                    try {
+                        var r = await cfg.enviar(new FormData(dlgForm), dlgForm);
+                        cerrarDialogo(r === undefined ? true : r);
+                    } catch (ex) {
+                        err.querySelector('span').textContent = ex.message;
+                        err.hidden = false;
+                        ok.disabled = false;
+                        ok.innerHTML = etiqueta;
+                    }
+                };
+            });
+        }
+        function cerrarDialogo(valor) {
+            dlg.classList.remove('show');
+            dlg.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (dlgAnterior && dlgAnterior.focus) dlgAnterior.focus();
+            if (dlgResolver) { dlgResolver(valor || null); dlgResolver = null; }
+        }
+        dlg.addEventListener('click', function (e) { if (e.target === dlg || e.target.closest('[data-cerrar]')) cerrarDialogo(null); });
+        dlg.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); cerrarDialogo(null); }
+            if (e.key === 'Tab') {
+                var f = dlg.querySelectorAll('button:not([disabled]), input, textarea, select, a[href]');
+                var a = f[0], z = f[f.length - 1];
+                if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+                else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+            }
+        });
+
+        // ------------------------------------------------------------ pintar
+        function nivelDe(clave) { return SMS.nivel(datos.matriz.niveles, clave); }
+
+        function pintarEstadoAtencion() {
+            var r = datos.reporte;
+            var resp = r.areas_responsables.length ? r.areas_responsables : [];
+            var cerrado = ['D', 'E', 'F'].indexOf(r.estado) >= 0;
+            var html =
+                '<div><dt>Estatus actual</dt><dd>' + SMS.estado(r.estado, true) + '</dd></div>' +
+                '<div><dt>Responsable asignado</dt><dd>' + (resp.length ? '<ul class="lista-areas">' + resp.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' : '<span class="nd">Sin área responsable</span>') + '</dd></div>' +
+                '<div><dt>Nivel de riesgo</dt><dd>' + SMS.riesgo(r.riesgo, datos.matriz.niveles, { completo: true }) + '</dd></div>' +
+                '<div><dt>Plazo <button type="button" class="ayuda" data-tip="Vence en la fecha más próxima entre: la fecha compromiso del reporte, el plazo de su nivel de riesgo inicial y las fechas compromiso de sus acciones abiertas" aria-label="Cómo se calcula el plazo">' + ic('help') + '</button></dt><dd>' + SMS.semaforo(r, datos.dias_aviso, { estado: datos.semaforo }) + '</dd></div>' +
+                '<div><dt>Última actualización</dt><dd>' + SMS.fechaHora(r.fecha_actualizacion) + '<span class="sg-help" style="display:block">' + SMS.relativa(r.fecha_actualizacion) + '</span></dd></div>' +
+                '<div><dt>Acciones</dt><dd>' + (r.acciones.total ? r.acciones.total + ' registrada(s) · ' + r.acciones.abiertas + ' abierta(s) · ' + r.acciones.por_verificar + ' por verificar' : '<span class="nd">Sin acciones registradas</span>') + '</dd></div>';
+            $('estadoAtencion').innerHTML = html;
+            $('estadoCabecera').innerHTML = SMS.estado(r.estado, true);
+            $('metaRiesgo').innerHTML = r.riesgo ? SMS.ic('shield') + '<span>Riesgo ' + esc(r.riesgo.indice) + ' · ' + esc(r.riesgo.nombre) + '</span>' : '';
+        }
+
+        function pintarSesion() {
+            var s = datos.sesion, cont = $('sesionAviso');
+            cont.hidden = false;
+            if (s) {
+                cont.innerHTML = '<span class="sg-chip sg-chip--brand">' + ic('user') + 'Sesión: ' + esc(s.nombre) + ' · ' + esc(s.rol) + (s.departamento ? ' · ' + esc(s.departamento) : '') + '</span>';
+            } else {
+                cont.innerHTML = '<div class="sg-banner info" style="flex:1">' + ic('info') + '<span>Estás viendo la información pública del reporte. <a href="/login?volver=' + encodeURIComponent(location.pathname) + '">Inicia sesión</a> para ver el detalle de las acciones correctivas y gestionarlo según tu rol.</span></div>';
+            }
+        }
+
+        function cuadroRiesgo(v) {
+            var n = nivelDe(v.nivel);
+            var color = n ? n.color : '#8895A0';
+            var p = datos.matriz.probabilidad.find(function (x) { return x.valor === v.probabilidad; });
+            var s = datos.matriz.severidad.find(function (x) { return x.valor === v.severidad; });
+            return '<div class="riesgo-vigente">' +
+                '<div class="riesgo-cuadro" style="--c:' + esc(color) + ';--tc:' + SMS.textoSobre(color) + '"><b>' + esc(v.indice) + '</b><small>Índice</small></div>' +
+                '<div><h3>' + esc(v.nivel_nombre) + '</h3>' +
+                '<p>Prioridad: <strong>' + esc(v.prioridad || '—') + '</strong></p>' +
+                (v.fecha_limite ? '<p>Fecha límite de atención: <strong>' + SMS.fecha(v.fecha_limite) + '</strong></p>' : '') +
+                '<p class="sg-help">Probabilidad ' + v.probabilidad + ' · ' + esc(p ? p.nombre : '') + ' × Severidad ' + esc(s ? s.codigo + ' · ' + s.nombre : v.severidad) + '</p>' +
+                '<p class="sg-help">' + SMS.fechaHora(v.fecha) + (v.evaluado_por_nombre ? ' · ' + esc(v.evaluado_por_nombre) : '') + '</p></div></div>' +
+                (v.justificacion ? '<div class="medidas"><b>Justificación</b><p>' + esc(v.justificacion) + '</p></div>' : '');
+        }
+
+        // Opinión de quien reportó (frecuencia y gravedad 1 a 5): referencia para la evaluación
+        function textoPercepcion() {
+            if (!PERCEPCION) return '';
+            return '<div class="percepcion">' + ic('message', 'ic-16') + ' Opinión de quien reportó (solo referencia): frecuencia <strong>' + esc(PERCEPCION.probabilidad || 'sin opinión') +
+                '</strong> · gravedad <strong>' + esc(PERCEPCION.severidad || 'sin opinión') + '</strong></div>';
+        }
+
+        // Guía de severidad por tipo de consecuencia (si la matriz la define)
+        function filasGuia(c) {
+            return datos.matriz.severidad.slice().sort(function (a, b) { return b.valor - a.valor; }).map(function (s) {
+                return '<li><b>' + esc(s.codigo + ' · ' + s.nombre) + '</b> ' + esc((c.niveles && c.niveles[s.valor]) || '—') + '</li>';
+            }).join('');
+        }
+        function guiaSeveridad(abierta) {
+            var cons = datos.matriz.consecuencias || [];
+            if (!cons.length) return '';
+            return '<details class="guia-sev"' + (abierta ? ' open' : '') + '><summary>Guía de gravedad por tipo de consecuencia</summary>' +
+                '<select class="guia-sel" aria-label="Tipo de consecuencia">' + cons.map(function (c, i) { return '<option value="' + i + '">' + esc(c.nombre) + '</option>'; }).join('') + '</select>' +
+                '<ol class="guia-lista">' + filasGuia(cons[0]) + '</ol>' +
+                '<p class="sg-help">Tabla de gravedad del numeral 5.3 del Manual SMS. “—”: el manual no describe ese nivel para este tipo.</p></details>';
+        }
+        document.addEventListener('change', function (e) {
+            var sel = e.target.closest('.guia-sel');
+            if (!sel) return;
+            var c = (datos.matriz.consecuencias || [])[Number(sel.value)];
+            var lista = sel.parentNode.querySelector('.guia-lista');
+            if (c && lista) lista.innerHTML = filasGuia(c);
+        });
+
+        // Datos de quien reportó: solo para personal con sesión
+        var reportanteCargado = false;
+        async function cargarReportante() {
+            if (reportanteCargado || !datos.permisos.interno) return;
+            reportanteCargado = true;
+            try {
+                SMS.pintarReportante($('fichaDatos'), (await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/reportante')).reportante);
+            } catch (e) {
+                reportanteCargado = false;
+            }
+        }
+
+        function pintarRiesgo() {
+            var ri = datos.riesgo, cuerpo = $('riesgoCuerpo'), perm = datos.permisos;
+            var validada = datos.matriz.validada;
+            var cerrado = ['D', 'E', 'F'].indexOf(datos.reporte.estado) >= 0;
+            // Botones: solo con permiso; deshabilitados (con explicación) si la matriz no está validada
+            $('btnEvaluar').hidden = !perm.evaluar_riesgo;
+            $('btnEvaluar').querySelector('span').textContent = ri.inicial ? 'Reevaluar riesgo inicial' : 'Evaluar riesgo inicial';
+            $('btnResidual').hidden = !perm.evaluar_riesgo || !ri.inicial;
+            $('btnResidual').querySelector('span').textContent = ri.residual ? 'Actualizar riesgo residual' : 'Registrar riesgo residual';
+            ['btnEvaluar', 'btnResidual'].forEach(function (id) {
+                $(id).disabled = !perm.evaluar_habilitado;
+                if (!perm.evaluar_habilitado) $(id).setAttribute('data-tip', 'Disponible cuando un administrador valide la matriz de riesgo');
+                else $(id).removeAttribute('data-tip');
+            });
+
+            var html = '';
+            if (!validada) {
+                html += '<div class="sg-banner warn" style="margin-bottom:14px">' + ic('warn') + '<span><strong>Criterios pendientes de validación.</strong> Solo se registran evaluaciones con una matriz validada institucionalmente. ' +
+                    'La matriz tiene los criterios del Manual SMS (numeral 5.3) y falta confirmarla en el sistema. <a href="/admin/matriz-riesgo">Ver la matriz</a>.</span></div>';
+            } else if (datos.matriz.validacion && datos.matriz.validacion.por) {
+                html += '<p class="sg-help" style="margin-bottom:12px">' + ic('user-check', 'ic-16') + ' Matriz validada por ' + esc(datos.matriz.validacion.por) +
+                    (datos.matriz.validacion.fecha ? ' el ' + SMS.fecha(datos.matriz.validacion.fecha) : '') +
+                    (datos.matriz.validacion.referencia ? ' · ' + esc(datos.matriz.validacion.referencia) : '') + '</p>';
+            }
+            if (!ri.inicial) {
+                html += '<div class="sg-empty" style="padding:24px 12px">' + ic('shield') + '<b>Sin evaluación de riesgo</b>' +
+                    (perm.evaluar_riesgo
+                        ? (validada ? 'Evalúa la probabilidad y la severidad del peligro para clasificar su riesgo inicial y la prioridad de atención.' : 'La evaluación se habilitará cuando la matriz esté validada.')
+                        : (cerrado ? 'El reporte se cerró sin evaluación de riesgo.' : 'Pendiente de evaluar por supervisión.')) + '</div>';
+            } else {
+                var res = ri.residual;
+                html += '<div class="riesgo-flujo">' +
+                    '<div class="riesgo-flujo__paso"><h3>1 · Riesgo inicial</h3>' + cuadroRiesgo(ri.inicial) + '</div>' +
+                    '<div class="riesgo-flujo__flecha" aria-hidden="true">' + ic('arrow-right', 'ic-24') + '</div>' +
+                    (res
+                        ? '<div class="riesgo-flujo__paso"><h3>2 · Riesgo residual</h3>' + cuadroRiesgo(res) +
+                          '<div class="medidas"><b>Medidas de mitigación</b><p>' + esc(res.medidas_mitigacion || '—') + '</p></div></div>'
+                        : '<div class="riesgo-flujo__paso is-vacio"><h3>2 · Riesgo residual</h3><p style="font-size:13.5px;color:var(--n700)">Aún no se registra.</p>' +
+                          '<p class="sg-help">Se evalúa después de aplicar las medidas de mitigación (por ejemplo, las acciones correctivas) para confirmar que el riesgo bajó a un nivel aceptable.</p></div>') +
+                    '</div>';
+                if (ri.historial.length > 1) {
+                    html += '<details class="historial-riesgo"><summary>Historial de evaluaciones (' + ri.historial.length + ')</summary><ul>' +
+                        ri.historial.map(function (h) {
+                            return '<li>' + SMS.riesgo({ nivel: h.nivel, indice: h.indice, nombre: h.nivel_nombre }, datos.matriz.niveles) +
+                                ' <span class="etiqueta-tipo">' + (h.tipo === 'residual' ? 'Residual' : 'Inicial') + '</span> ' +
+                                SMS.fechaHora(h.fecha) + (h.evaluado_por_nombre ? ' · ' + esc(h.evaluado_por_nombre) : '') + '</li>';
+                        }).join('') + '</ul></details>';
+                }
+            }
+            if (perm.evaluar_riesgo) html += guiaSeveridad(false);
+            cuerpo.innerHTML = html;
+        }
+
+        function pintarEtapas() {
+            $('etapasCuerpo').innerHTML = SMS.etapas(datos.etapas) +
+                (datos.etapas.some(function (e) { return e.estado === 'omitida'; })
+                    ? '<p class="sg-help" style="margin-top:12px">' + ic('info', 'ic-16') + ' Las etapas marcadas “Sin registro” se omitieron: el reporte avanzó sin un seguimiento con ese estatus.</p>' : '');
+            $('etapasSemaforo').innerHTML = SMS.semaforo(datos.reporte, datos.dias_aviso, { estado: datos.semaforo, sinDetalle: true });
+        }
+
+        function pintarCompromiso() {
+            var c = datos.compromiso.vigente, perm = datos.permisos, r = datos.reporte;
+            var cerrado = ['D', 'E', 'F'].indexOf(r.estado) >= 0;
+            var html = '';
+            if (c) {
+                html += '<div class="compromiso">' +
+                    '<div class="fila">' + ic('calendar') + '<span>Fecha compromiso: <strong>' + SMS.fecha(c.fecha_compromiso) + '</strong></span></div>' +
+                    '<div class="fila">' + ic('building') + '<span>' + (c.departamento ? esc(c.departamento) : '<span class="nd">Sin área indicada</span>') + '</span></div>' +
+                    '<div class="fila">' + ic('user') + '<span>' + (c.responsable_nombre ? esc(c.responsable_nombre) : '<span class="nd">Sin persona responsable indicada</span>') + '</span></div>' +
+                    '<p class="sg-help">Registrado ' + SMS.fechaHora(c.creado_en) + (c.creado_por_nombre ? ' por ' + esc(c.creado_por_nombre) : '') + '</p></div>';
+            } else {
+                html += '<p style="font-size:13.5px;color:var(--n700)">' + (cerrado ? 'El reporte se cerró sin fecha compromiso.' : 'Sin fecha compromiso asignada.') + '</p>' +
+                    (!cerrado ? '<p class="sg-help" style="margin-top:4px">Asignar responsable y fecha permite medir el cumplimiento en el semáforo de plazos.</p>' : '');
+            }
+            if (r.riesgo_inicial && r.plazo_reporte && (!c || SMS.diaLocal(r.plazo_reporte) !== SMS.diaLocal(c.fecha_compromiso))) {
+                html += '<p class="sg-help" style="margin-top:8px">' + ic('shield', 'ic-16') + ' El nivel de riesgo fija un plazo de atención al ' + SMS.fecha(r.plazo_reporte) + '.</p>';
+            }
+            if (perm.asignar_compromiso) {
+                html += '<button type="button" class="btn btn-secondary btn-sm btn-block no-print" id="btnCompromiso" style="margin-top:12px">' + ic(c ? 'edit' : 'plus') + (c ? 'Reprogramar o cambiar responsable' : 'Asignar responsable y fecha') + '</button>';
+            }
+            var h = datos.compromiso.historial;
+            if (h.length > 1) {
+                html += '<details class="historial-mini"><summary>Cambios anteriores (' + (h.length - 1) + ')</summary><ul>' + h.slice(1).map(function (x) {
+                    return '<li>' + SMS.fecha(x.fecha_compromiso) + (x.departamento ? ' · ' + esc(x.departamento) : '') + (x.responsable_nombre ? ' · ' + esc(x.responsable_nombre) : '') +
+                        '<small>' + SMS.fechaHora(x.creado_en) + (x.creado_por_nombre ? ' · ' + esc(x.creado_por_nombre) : '') + (x.motivo ? ' · ' + esc(x.motivo) : '') + '</small></li>';
+                }).join('') + '</ul>' +
+                '<p class="sg-help" style="margin-top:6px">Motivo del último cambio: ' + esc(h[0].motivo || '—') + '</p></details>';
+            }
+            $('compromisoCuerpo').innerHTML = html;
+            var b = $('btnCompromiso'); if (b) b.addEventListener('click', dialogoCompromiso);
+        }
+
+        function pintarZona() {
+            var z = datos.zonas;
+            $('zona').hidden = !z.habilitado;
+            if (!z.habilitado) return;
+            var html = z.asignada
+                ? '<div class="compromiso"><div class="fila">' + ic('pin') + '<span><strong>' + esc(z.asignada.nombre) + '</strong> <span class="mono" style="font-size:12px;color:var(--n500)">' + esc(z.asignada.codigo || '') + '</span></span></div></div>'
+                : '<p style="font-size:13.5px;color:var(--n700)">Sin zona asignada.</p><p class="sg-help" style="margin-top:4px">Lugar reportado: ' + esc(datos.reporte.lugar || '—') + '</p>';
+            if (datos.permisos.asignar_zona) {
+                html += '<button type="button" class="btn btn-secondary btn-sm btn-block no-print" id="btnZona" style="margin-top:12px">' + ic('pin') + (z.asignada ? 'Cambiar zona' : 'Asignar zona') + '</button>';
+            }
+            $('zonaCuerpo').innerHTML = html;
+            var b = $('btnZona'); if (b) b.addEventListener('click', dialogoZona);
+        }
+
+        function dialogoCompromiso() {
+            var c = datos.compromiso.vigente;
+            var areas = datos.areas.filter(function (a) { return datos.permisos.asignar_compromiso_global || a.id === datos.usuario_departamento; });
+            var porDefecto = c && c.id_departamento_responsable ? c.id_departamento_responsable : ((areas.find(function (a) { return a.es_responsable; }) || areas[0] || {}).id);
+            var hoy = SMS.diaLocal();
+            abrirDialogo({
+                titulo: c ? 'Reprogramar compromiso de atención' : 'Asignar responsable y fecha compromiso', boton: 'Guardar', icono: 'save',
+                html: '<div class="form-grid">' +
+                    '<div class="sg-field ancho"><label for="cArea">Área responsable</label><select id="cArea" name="id_departamento_responsable">' +
+                    (areas.length ? areas.map(function (a) { return '<option value="' + a.id + '"' + (a.id === porDefecto ? ' selected' : '') + '>' + esc(a.nombre) + (a.es_responsable ? ' (responsable)' : '') + '</option>'; }).join('') : '<option value="">Sin áreas asociadas</option>') +
+                    '</select><span class="sg-help">Solo áreas asociadas al reporte.</span></div>' +
+                    '<div class="sg-field"><label for="cResp">Persona responsable</label><input id="cResp" name="responsable_nombre" maxlength="200" placeholder="Nombre y cargo" value="' + esc(c && c.responsable_nombre || '') + '"></div>' +
+                    '<div class="sg-field"><label for="cFecha">Fecha compromiso <span class="req">*</span></label><input type="date" id="cFecha" name="fecha_compromiso" required min="' + hoy + '"' + (c ? ' value="' + SMS.diaLocal(c.fecha_compromiso) + '"' : '') + '></div>' +
+                    '<div class="sg-field ancho"><label for="cMot">Motivo' + (c ? ' del cambio <span class="req">*</span>' : ' u observaciones') + '</label><textarea id="cMot" name="motivo" maxlength="1000"' + (c ? ' required' : '') + ' style="min-height:80px"></textarea></div>' +
+                    '</div><p class="sg-help" style="margin-top:10px">El cambio queda en el historial y en la bitácora con tu nombre, y se notifica al área.</p>',
+                enviar: async function (fd) {
+                    var cuerpo = {}; fd.forEach(function (v, k) { cuerpo[k] = String(v).trim(); });
+                    if (!cuerpo.fecha_compromiso) throw new Error('Indica la fecha compromiso');
+                    if (c && cuerpo.motivo.length < 5) throw new Error('Indica el motivo del cambio (mínimo 5 caracteres)');
+                    await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/compromiso', { method: 'POST', json: cuerpo });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Compromiso de atención guardado', 'success'); cargar(); } });
+        }
+
+        function dialogoZona() {
+            var z = datos.zonas;
+            abrirDialogo({
+                titulo: 'Zona del hallazgo', boton: 'Guardar', icono: 'save',
+                html: '<div class="sg-field"><label for="zSel">Zona autorizada</label><select id="zSel" name="id_zona"><option value="">Sin zona</option>' +
+                    z.catalogo.map(function (x) { return '<option value="' + x.id + '"' + (z.asignada && z.asignada.id === x.id ? ' selected' : '') + '>' + esc(x.codigo + ' · ' + x.nombre) + (x.tipo ? ' (' + esc(x.tipo) + ')' : '') + '</option>'; }).join('') +
+                    '</select></div>' +
+                    '<p class="sg-help" style="margin-top:8px">Lugar capturado por quien reportó: ' + esc(datos.reporte.lugar || '—') + '</p>' +
+                    '<div class="sg-field" style="margin-top:12px"><label for="zNota">Nota (opcional)</label><input id="zNota" name="nota" maxlength="300"></div>',
+                enviar: async function (fd) {
+                    await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/zona', { method: 'PUT', json: { id_zona: fd.get('id_zona') || null, nota: fd.get('nota') } });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Zona actualizada', 'success'); cargar(); } });
+        }
+
+        var TEXTO_TRANSICION = {
+            en_proceso: { pendiente: ['Iniciar atención', 'activity', false], completada: ['No efectiva · reabrir', 'warn', true] },
+            completada: ['Marcar como concluida', 'ok', false],
+            verificada: ['Verificar: efectiva', 'user-check', false],
+            cancelada: ['Cancelar acción', 'ban', true]
+        };
+        function textoTransicion(a, destino) {
+            var t = TEXTO_TRANSICION[destino];
+            if (destino === 'en_proceso') t = t[a.estado];
+            return t;
+        }
+
+        function pintarAcciones() {
+            var cuerpo = $('accionesCuerpo');
+            var lista = datos.acciones;
+            var res = datos.acciones_resumen;
+            $('btnNuevaAccion').hidden = !datos.permisos.registrar_accion || ['D', 'E', 'F'].indexOf(datos.reporte.estado) >= 0;
+            $('accionesCuenta').textContent = res.total ? '(' + res.total + ')' : '';
+            var html = '';
+            if (!datos.cierre.puede_cerrar) {
+                html += '<div class="sg-banner warn" style="margin-bottom:14px">' + ic('lock') + '<span>' + esc(datos.cierre.mensaje) + ' Las áreas podrán marcar el reporte como Resuelto cuando todas estén verificadas o canceladas.</span></div>';
+            }
+            if (lista === null) {
+                html += res.total
+                    ? '<p>' + res.total + ' acción(es) registrada(s): ' + res.abiertas + ' abierta(s) y ' + res.por_verificar + ' por verificar. El detalle es visible para el personal con sesión.</p>'
+                    : '<div class="sg-empty" style="padding:28px 12px">' + ic('checklist') + '<b>Sin acciones registradas</b>Aún no se han definido acciones correctivas o preventivas.</div>';
+                cuerpo.innerHTML = html;
+                return;
+            }
+            if (!lista.length) {
+                html += '<div class="sg-empty" style="padding:28px 12px">' + ic('checklist') + '<b>Sin acciones registradas</b>' +
+                    (datos.permisos.registrar_accion ? 'Registra la acción correctiva o preventiva, su responsable y la fecha compromiso.' : 'Aún no se han definido acciones correctivas o preventivas.') + '</div>';
+                cuerpo.innerHTML = html;
+                return;
+            }
+            html += '<div class="acciones-lista">' + lista.map(function (a) {
+                var cerrada = ['verificada', 'cancelada'].indexOf(a.estado) >= 0;
+                var botones = a.transiciones.map(function (d) {
+                    var t = textoTransicion(a, d);
+                    return '<button type="button" class="btn ' + (t[2] ? 'btn-secondary' : (d === 'verificada' ? 'btn-primary' : 'btn-secondary')) + ' btn-sm" data-transicion="' + d + '" data-id="' + a.id + '">' + ic(t[1]) + esc(t[0]) + '</button>';
+                }).join('');
+                if (a.editable) {
+                    botones += '<button type="button" class="btn btn-ghost btn-sm" data-reprogramar="' + a.id + '">' + ic('calendar') + 'Reprogramar</button>';
+                }
+                if (a.editable || (a.estado === 'completada' && a.transiciones.length)) {
+                    botones += '<label class="btn btn-ghost btn-sm" style="cursor:pointer">' + ic('camera') + 'Agregar evidencia<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden data-evidencia="' + a.id + '"></label>';
+                }
+                var responsable = [a.departamento_responsable, a.responsable_nombre].filter(Boolean).join(' · ') || 'Sin responsable';
+                return '<article class="accion' + (cerrada ? ' is-cerrada' : '') + '" id="accion-' + a.id + '">' +
+                    '<div class="accion__top"><span class="accion__tipo">Acción ' + esc(a.tipo_nombre.toLowerCase()) + ' #' + a.id + '</span>' +
+                    '<span class="est-accion est-accion--' + esc(a.estado) + '">' + esc(a.estado_nombre) + '</span></div>' +
+                    '<p class="accion__desc">' + esc(a.descripcion) + '</p>' +
+                    '<div class="accion__datos">' +
+                    '<span>' + ic('users') + esc(responsable) + '</span>' +
+                    '<span>' + ic('calendar') + 'Asignada ' + SMS.fecha(a.fecha_asignacion) + '</span>' +
+                    '<span>' + ic('clock') + 'Compromiso ' + SMS.fecha(a.fecha_compromiso) + '</span>' +
+                    (a.vencimiento ? '<span>' + SMS.vencimiento(a.fecha_compromiso, datos.dias_aviso) + '</span>' : '') +
+                    (a.efectividad !== 'sin_verificar' ? '<span>' + ic(a.efectividad === 'efectiva' ? 'ok' : 'warn') + 'Efectividad: ' + (a.efectividad === 'efectiva' ? 'efectiva' : 'no efectiva') + (a.verificado_por_nombre ? ' (' + esc(a.verificado_por_nombre) + ')' : '') + '</span>' : '') +
+                    '</div>' +
+                    (a.observaciones ? '<div class="accion__nota"><strong>Observaciones:</strong> ' + esc(a.observaciones) + '</div>' : '') +
+                    (a.verificacion_comentario ? '<div class="accion__nota"><strong>' + (a.estado === 'cancelada' ? 'Motivo de cancelación' : 'Verificación') + ':</strong> ' + esc(a.verificacion_comentario) + '</div>' : '') +
+                    (a.evidencias.length ? '<div class="galeria galeria--sm">' + a.evidencias.map(function (f, i) {
+                        return '<a href="/uploads/' + esc(f.ruta_optimizada || f.ruta_original) + '" target="_blank" rel="noopener" aria-label="Evidencia ' + (i + 1) + ' de la acción"><img src="/uploads/' + esc(f.ruta_thumbnail || f.ruta_optimizada) + '" alt="Evidencia ' + (i + 1) + '" loading="lazy" onerror="this.onerror=null;this.parentNode.classList.add(\'rota\')"><span class="num">' + (i + 1) + '</span></a>';
+                    }).join('') + '</div>' : '') +
+                    (botones ? '<div class="accion__botones no-print">' + botones + '</div>' : '') +
+                    '</article>';
+            }).join('') + '</div>';
+            cuerpo.innerHTML = html;
+        }
+
+        var ICONO_EVENTO = {
+            riesgo_evaluado: 'shield', accion_registrada: 'checklist', accion_en_proceso: 'activity', accion_completada: 'ok',
+            accion_verificada: 'user-check', accion_reabierta: 'warn', accion_cancelada: 'ban', accion_reprogramada: 'calendar',
+            accion_editada: 'edit', accion_evidencia: 'camera',
+            riesgo_residual_evaluado: 'shield', compromiso_asignado: 'calendar', compromiso_reprogramado: 'calendar',
+            zona_asignada: 'pin', zona_retirada: 'pin'
+        };
+        var TITULO_EVENTO = {
+            riesgo_evaluado: 'Evaluación de riesgo inicial', accion_registrada: 'Acción registrada', accion_en_proceso: 'Acción en proceso',
+            accion_completada: 'Acción concluida', accion_verificada: 'Efectividad verificada', accion_reabierta: 'Acción reabierta',
+            accion_cancelada: 'Acción cancelada', accion_reprogramada: 'Fecha compromiso de la acción reprogramada', accion_editada: 'Acción editada',
+            accion_evidencia: 'Evidencia agregada',
+            riesgo_residual_evaluado: 'Evaluación de riesgo residual', compromiso_asignado: 'Responsable y fecha compromiso asignados',
+            compromiso_reprogramado: 'Fecha compromiso reprogramada', zona_asignada: 'Zona asignada', zona_retirada: 'Zona retirada'
+        };
+
+        function pintarLinea() {
+            var items = [];
+            datos.seguimientos.forEach(function (s) { items.push({ tipo: 's', fecha: s.fecha, d: s }); });
+            datos.eventos.forEach(function (e) { items.push({ tipo: 'e', fecha: e.fecha, d: e }); });
+            items.sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+            $('lineaCuenta').textContent = '(' + items.length + ')';
+            if (!items.length) {
+                $('lineaCuerpo').innerHTML = '<div class="sg-empty">' + ic('history') + '<b>Sin movimientos</b></div>';
+                return;
+            }
+            $('lineaCuerpo').innerHTML = '<ol class="timeline">' + items.map(function (it) {
+                if (it.tipo === 's') {
+                    var s = it.d;
+                    var quien = s.departamento || 'Registro del reporte';
+                    return '<li class="timeline-item"><div class="timeline-icon estado-' + esc(s.estado) + '">' + esc(s.estado) + '</div><div class="timeline-content">' +
+                        '<div class="timeline-header"><div class="timeline-dept">' + esc(quien) + ' <span class="sg-folio">' + esc(s.folio_seguimiento) + '</span></div>' +
+                        '<div class="timeline-date">' + ic('calendar') + SMS.fechaHora(s.fecha) + '</div></div>' +
+                        '<div class="timeline-estado">' + SMS.estado(s.estado, true) + (s.usuario ? '<span class="tl-quien">' + ic('user') + esc(s.usuario) + '</span>' : '') + '</div>' +
+                        (s.descripcion ? '<div class="timeline-body">' + esc(s.descripcion) + '</div>' : '<div class="timeline-body pendiente">Sin descripción</div>') +
+                        '</div></li>';
+                }
+                var e = it.d;
+                return '<li class="timeline-item tl-evento"><div class="timeline-icon">' + ic(ICONO_EVENTO[e.accion] || 'info') + '</div><div class="timeline-content">' +
+                    '<div class="timeline-header"><div class="timeline-dept">' + esc(TITULO_EVENTO[e.accion] || e.accion) + '</div>' +
+                    '<div class="timeline-date">' + ic('calendar') + SMS.fechaHora(e.fecha) + '</div></div>' +
+                    '<div class="timeline-estado"><span class="tl-quien">' + ic('user') + esc(e.usuario || 'Sistema') + (e.departamento ? ' · ' + esc(e.departamento) : '') + '</span></div>' +
+                    (e.descripcion ? '<div class="timeline-body">' + esc(e.descripcion) + '</div>' : '') +
+                    '</div></li>';
+            }).join('') + '</ol>';
+        }
+
+        async function cargar() {
+            try {
+                datos = await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/gestion');
+                pintarSesion();
+                $('btnEliminar').hidden = !datos.permisos.eliminar_reporte;
+                pintarEtapas();
+                pintarEstadoAtencion();
+                pintarCompromiso();
+                pintarZona();
+                pintarRiesgo();
+                pintarAcciones();
+                pintarLinea();
+                cargarReportante();
+                if (location.hash === '#acciones') $('acciones').scrollIntoView();
+            } catch (e) {
+                ['etapasCuerpo', 'compromisoCuerpo', 'riesgoCuerpo', 'accionesCuerpo', 'lineaCuerpo'].forEach(function (id) {
+                    $(id).innerHTML = '<div class="sg-empty crit">' + ic('crit') + '<b>No se pudo cargar la información</b>' + esc(e.message) + '</div>';
+                });
+            }
+        }
+
+        // ---------------------------------------------------- evaluar riesgo
+        function dialogoEvaluacion(tipo) {
+            var eleccion = null;
+            var ri = datos.riesgo;
+            var previa = tipo === 'residual' ? ri.residual : ri.inicial;
+            var acc = (datos.acciones || []).filter(function (a) { return a.estado !== 'cancelada'; });
+            abrirDialogo({
+                titulo: tipo === 'residual' ? 'Riesgo residual (después de la mitigación)' : (previa ? 'Reevaluar riesgo inicial' : 'Evaluar riesgo inicial'),
+                ancho: true, boton: 'Guardar evaluación', icono: 'save',
+                html: (tipo === 'residual'
+                        ? '<p class="sg-help" style="margin-bottom:12px">Riesgo inicial: <strong>' + esc(ri.inicial.indice + ' · ' + ri.inicial.nivel_nombre) + '</strong>. Elige la celda que corresponde al riesgo <strong>una vez aplicadas</strong> las medidas de mitigación.</p>'
+                        : '<p class="sg-help" style="margin-bottom:12px">Elige la celda que corresponde a la <strong>probabilidad</strong> (filas) y la <strong>severidad</strong> (columnas) del peligro identificado, antes de aplicar medidas.</p>') +
+                    (tipo === 'inicial' ? textoPercepcion() : '') +
+                    '<div id="dlgMatriz"></div>' +
+                    '<div class="eval-res" id="dlgRes" aria-live="polite"><span class="sg-help">Aún no eliges una celda.</span></div>' +
+                    guiaSeveridad(false) +
+                    (tipo === 'residual'
+                        ? '<div class="sg-field"><label for="dlgMed">Medidas de mitigación aplicadas <span class="req">*</span></label>' +
+                          '<textarea id="dlgMed" name="medidas_mitigacion" maxlength="4000" required placeholder="Qué se hizo para reducir la probabilidad o la severidad del peligro">' +
+                          esc(acc.length && !(ri.residual && ri.residual.medidas_mitigacion) ? acc.map(function (a) { return '• ' + a.descripcion + ' (' + a.estado_nombre.toLowerCase() + ')'; }).join('\n') : (ri.residual && ri.residual.medidas_mitigacion) || '') + '</textarea>' +
+                          (acc.length ? '<span class="sg-help">Se precargaron las acciones registradas; ajusta el texto según lo realmente aplicado.</span>' : '') + '</div>'
+                        : '') +
+                    '<div class="sg-field" style="margin-top:12px"><label for="dlgJust">Justificación <span class="req">*</span></label>' +
+                    '<textarea id="dlgJust" name="justificacion" maxlength="2000" required placeholder="Describe los factores considerados: exposición, controles existentes, antecedentes…"></textarea></div>',
+                alAbrir: function () {
+                    SMSGraficas.matriz($('dlgMatriz'), {
+                        matriz: datos.matriz,
+                        seleccion: previa ? previa.probabilidad + '-' + previa.severidad : null,
+                        alElegir: function (c) {
+                            eleccion = c;
+                            $('dlgRes').innerHTML = '<div class="riesgo-cuadro" style="--c:' + esc(c.nivel.color) + ';--tc:' + SMS.textoSobre(c.nivel.color) + '"><b>' + esc(c.codigo) + '</b></div>' +
+                                '<div><strong>' + esc(c.nivel.nombre) + '</strong><div class="sg-help">Prioridad: ' + esc(c.nivel.prioridad) + (c.nivel.plazo_dias && tipo === 'inicial' ? ' · plazo de ' + c.nivel.plazo_dias + ' días' : '') + '</div></div>';
+                        }
+                    });
+                    if (previa) {
+                        var n = nivelDe(previa.nivel) || { color: '#8895A0', nombre: previa.nivel_nombre, prioridad: previa.prioridad };
+                        eleccion = { probabilidad: previa.probabilidad, severidad: previa.severidad, codigo: previa.indice, nivel: n };
+                        $('dlgRes').innerHTML = '<span class="sg-help">Evaluación vigente: ' + esc(previa.indice) + ' · ' + esc(previa.nivel_nombre) + '. Elige una celda para cambiarla.</span>';
+                    }
+                },
+                enviar: async function (fd) {
+                    if (!eleccion) throw new Error('Elige una celda de la matriz');
+                    var j = String(fd.get('justificacion') || '').trim();
+                    if (j.length < 10) throw new Error('Justifica la evaluación (mínimo 10 caracteres)');
+                    var med = String(fd.get('medidas_mitigacion') || '').trim();
+                    if (tipo === 'residual' && med.length < 10) throw new Error('Describe las medidas de mitigación (mínimo 10 caracteres)');
+                    await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/riesgo', { method: 'POST', json: { tipo: tipo, probabilidad: eleccion.probabilidad, severidad: eleccion.severidad, justificacion: j, medidas_mitigacion: med } });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Evaluación de riesgo ' + tipo + ' guardada', 'success'); cargar(); } });
+        }
+        $('btnEvaluar').addEventListener('click', function () { dialogoEvaluacion('inicial'); });
+        $('btnResidual').addEventListener('click', function () { dialogoEvaluacion('residual'); });
+
+        // --------------------------------------------------------- nueva acción
+        async function catalogoDeptos() {
+            if (deptos.length) return deptos;
+            try { deptos = (await SMS.api('/api/sms/catalogos')).departamentos.filter(function (d) { return d.activo; }); } catch (e) { deptos = []; }
+            return deptos;
+        }
+        $('btnNuevaAccion').addEventListener('click', async function () {
+            var lista = await catalogoDeptos();
+            var hoy = SMS.diaLocal();
+            abrirDialogo({
+                titulo: 'Registrar acción', boton: 'Registrar acción', icono: 'plus',
+                html: (datos.reporte.sugerencia_prevencion
+                        ? '<div class="accion__nota" style="margin:0 0 14px"><strong>Sugerencia de quien reportó:</strong> ' + esc(datos.reporte.sugerencia_prevencion) + '</div>'
+                        : '') +
+                    '<div class="form-grid">' +
+                    '<div class="sg-field ancho"><span class="sg-label">Tipo de acción <span class="req">*</span></span><div class="tipo-opc">' +
+                    '<label><input type="radio" name="tipo" value="correctiva" checked> Correctiva <small class="sg-help">(elimina la causa)</small></label>' +
+                    '<label><input type="radio" name="tipo" value="preventiva"> Preventiva <small class="sg-help">(evita que se repita)</small></label></div></div>' +
+                    '<div class="sg-field ancho"><label for="nDesc">Descripción de la acción <span class="req">*</span></label><textarea id="nDesc" name="descripcion" maxlength="2000" required placeholder="Qué se hará, dónde y con qué alcance"></textarea></div>' +
+                    '<div class="sg-field"><label for="nDepto">Área responsable</label><select id="nDepto" name="id_departamento_responsable"><option value="">Selecciona…</option>' +
+                    lista.map(function (d) { return '<option value="' + d.id + '">' + esc(d.nombre) + '</option>'; }).join('') + '</select></div>' +
+                    '<div class="sg-field"><label for="nResp">Persona responsable</label><input id="nResp" name="responsable_nombre" maxlength="200" placeholder="Nombre y cargo"></div>' +
+                    '<div class="sg-field"><label for="nAsig">Fecha de asignación</label><input type="date" id="nAsig" name="fecha_asignacion" value="' + hoy + '"></div>' +
+                    '<div class="sg-field"><label for="nComp">Fecha compromiso <span class="req">*</span></label><input type="date" id="nComp" name="fecha_compromiso" min="' + hoy + '" required></div>' +
+                    '<div class="sg-field ancho"><label for="nObs">Observaciones</label><textarea id="nObs" name="observaciones" maxlength="2000" style="min-height:80px"></textarea></div>' +
+                    '</div>',
+                enviar: async function (fd) {
+                    var cuerpo = {};
+                    fd.forEach(function (v, k) { cuerpo[k] = String(v).trim(); });
+                    if (cuerpo.descripcion.length < 5) throw new Error('Describe la acción (mínimo 5 caracteres)');
+                    if (!cuerpo.id_departamento_responsable && !cuerpo.responsable_nombre) throw new Error('Indica el área o la persona responsable');
+                    if (!cuerpo.fecha_compromiso) throw new Error('Indica la fecha compromiso');
+                    if (cuerpo.fecha_asignacion && cuerpo.fecha_compromiso < cuerpo.fecha_asignacion) throw new Error('La fecha compromiso no puede ser anterior a la de asignación');
+                    await SMS.api('/api/sms/reportes/' + encodeURIComponent(FOLIO) + '/acciones', { method: 'POST', json: cuerpo });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Acción registrada', 'success'); cargar(); } });
+        });
+
+        // ---------------------------------------------- transiciones y edición
+        document.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-transicion]');
+            if (b) return transicion(Number(b.dataset.id), b.dataset.transicion);
+            var r = e.target.closest('[data-reprogramar]');
+            if (r) return reprogramar(Number(r.dataset.reprogramar));
+        });
+        document.addEventListener('change', function (e) {
+            var inp = e.target.closest('[data-evidencia]');
+            if (inp && inp.files.length) subirEvidencia(Number(inp.dataset.evidencia), inp);
+        });
+
+        function accionPorId(id) { return datos.acciones.find(function (a) { return a.id === id; }); }
+
+        function transicion(id, destino) {
+            var a = accionPorId(id);
+            var t = textoTransicion(a, destino);
+            var reabrir = destino === 'en_proceso' && a.estado === 'completada';
+            var requiere = destino === 'cancelada' || reabrir;
+            var ayuda = {
+                en_proceso: reabrir ? 'La verificación determinó que la acción no fue efectiva. Vuelve a quedar en proceso para el área responsable.' : 'La acción pasará a "En proceso".',
+                completada: 'La acción quedará como concluida y pendiente de que supervisión verifique su efectividad. El reporte no se cierra automáticamente.',
+                verificada: 'Confirmas que la acción se realizó y fue efectiva. Esta verificación queda registrada con tu nombre y no se puede deshacer.',
+                cancelada: 'La acción se cancelará y dejará de contar como pendiente. Esta acción no se puede deshacer.'
+            }[destino];
+            abrirDialogo({
+                titulo: t[0], boton: t[0], icono: t[1], peligro: destino === 'cancelada',
+                html: '<p style="margin-bottom:14px;color:var(--n700)">' + esc(ayuda) + '</p>' +
+                    '<div class="accion__nota" style="margin:0 0 14px">' + esc(a.descripcion) + '</div>' +
+                    '<div class="sg-field"><label for="tCom">' + (destino === 'cancelada' ? 'Motivo de la cancelación' : reabrir ? 'Por qué no fue efectiva' : destino === 'completada' ? 'Qué se realizó' : 'Comentario') + (requiere ? ' <span class="req">*</span>' : ' <small>(opcional)</small>') + '</label>' +
+                    '<textarea id="tCom" name="comentario" maxlength="2000"' + (requiere ? ' required' : '') + '></textarea></div>' +
+                    (reabrir ? '<div class="sg-field" style="margin-top:12px"><label for="tFecha">Nueva fecha compromiso <small>(opcional)</small></label><input type="date" id="tFecha" name="fecha_compromiso" min="' + SMS.diaLocal() + '"></div>' : ''),
+                enviar: async function (fd) {
+                    var c = String(fd.get('comentario') || '').trim();
+                    if (requiere && !c) throw new Error(destino === 'cancelada' ? 'Indica el motivo de la cancelación' : 'Explica por qué la acción no fue efectiva');
+                    var cuerpo = { estado: destino, comentario: c };
+                    if (reabrir && fd.get('fecha_compromiso')) cuerpo.fecha_compromiso = fd.get('fecha_compromiso');
+                    await SMS.api('/api/sms/acciones/' + id + '/estado', { method: 'PATCH', json: cuerpo });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Acción actualizada', 'success'); cargar(); } });
+        }
+
+        function reprogramar(id) {
+            var a = accionPorId(id);
+            abrirDialogo({
+                titulo: 'Reprogramar fecha compromiso', boton: 'Guardar', icono: 'calendar',
+                html: '<p style="margin-bottom:14px;color:var(--n700)">Fecha actual: <strong>' + SMS.fecha(a.fecha_compromiso) + '</strong>. El cambio queda registrado en la bitácora.</p>' +
+                    '<div class="sg-field"><label for="rFecha">Nueva fecha compromiso <span class="req">*</span></label><input type="date" id="rFecha" name="fecha_compromiso" required min="' + SMS.diaLocal(a.fecha_asignacion) + '"></div>' +
+                    '<div class="sg-field" style="margin-top:12px"><label for="rMot">Motivo <span class="req">*</span></label><textarea id="rMot" name="motivo" maxlength="500" required style="min-height:80px"></textarea></div>',
+                enviar: async function (fd) {
+                    if (!fd.get('fecha_compromiso')) throw new Error('Indica la nueva fecha');
+                    if (!String(fd.get('motivo') || '').trim()) throw new Error('Indica el motivo de la reprogramación');
+                    await SMS.api('/api/sms/acciones/' + id, { method: 'PATCH', json: { fecha_compromiso: fd.get('fecha_compromiso'), motivo: String(fd.get('motivo')).trim() } });
+                }
+            }).then(function (ok) { if (ok) { SAGA.toast('Fecha compromiso actualizada', 'success'); cargar(); } });
+        }
+
+        async function subirEvidencia(id, input) {
+            var archivos = Array.prototype.slice.call(input.files, 0, 3);
+            var fd = new FormData();
+            archivos.forEach(function (f) { fd.append('evidencia', f); });
+            SAGA.toast('Subiendo ' + archivos.length + ' imagen(es)…', 'info', { duracion: 2500 });
+            try {
+                await SMS.api('/api/sms/acciones/' + id + '/evidencia', { method: 'POST', body: fd });
+                SAGA.toast('Evidencia agregada', 'success');
+                cargar();
+            } catch (e) {
+                SAGA.toast(e.message, 'error');
+            } finally {
+                input.value = '';
+            }
+        }
+
+        cargar();
+    })();
+    </script>
+</body>
+</html>

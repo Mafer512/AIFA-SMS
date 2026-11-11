@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista general de reportes · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        /* Folio y acciones fijos solo si la tabla llega a desplazarse en horizontal */
+        .sg-table .col-folio { position: sticky; left: 0; z-index: 1; background: var(--sf); }
+        .sg-table th.col-folio { z-index: 3; background: var(--n50); }
+        .sg-table tbody tr:hover td.col-folio, .sg-table tbody tr:hover td.col-acciones { background: var(--sf-h); }
+        .sg-table .col-acciones { position: sticky; right: 0; z-index: 1; background: var(--sf); box-shadow: -1px 0 0 var(--n100); }
+        .sg-table th.col-acciones { z-index: 3; background: var(--n50); }
+        .sg-field--rango { grid-column: span 2; }
+        @media (max-width: 459px) { .sg-field--rango { grid-column: auto; } }
+        .seg-sub { display: flex; gap: 6px; margin-top: 6px; font-size: 12.5px; color: var(--n600); }
+        .seg-sub .ic { width: 14px; height: 14px; margin-top: 2px; color: var(--n400); flex: none; }
+        .folio-btn { padding: 0; border: 0; background: none; cursor: pointer; }
+        .folio-btn:hover .sg-folio { border-color: var(--v600); color: var(--v800); }
+        .folio-btn:focus-visible { outline: none; box-shadow: var(--focus); border-radius: 4px; }
+        .nota-kpi { margin-top: 10px; font-size: 12px; color: var(--n500); display: flex; align-items: center; gap: 6px; }
+        .nota-kpi .ic { width: 14px; height: 14px; }
+        .desc-celda { color: var(--n800); }
+        .estado-celda { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+        .sg-table .col-vencimiento { min-width: 150px; }
+        .barra-res { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .qv-seccion .etapas { margin-top: 4px; }
+
+        /* Tipo de reporte: atajos con conteo y columna de la tabla */
+        .tipos-barra { margin-top: 22px; display: grid; gap: 10px; }
+        .tipos-barra__cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+        .tipos-barra__cab h2 { font: 700 10.5px var(--ft); letter-spacing: .1em; text-transform: uppercase; color: var(--n600); }
+        .tipos-barra__cab p { font-size: 12px; color: var(--n500); }
+        .tipos-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tipo-at {
+            display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
+            background: var(--sf); border: 1px solid var(--n200); border-radius: 8px; cursor: pointer;
+            font: 600 13px var(--fx); color: var(--n800);
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .tipo-at:hover { border-color: var(--n300); background: var(--n50); }
+        .tipo-at:focus-visible { outline: none; box-shadow: var(--focus); }
+        .tipo-at[aria-pressed="true"] { border-color: var(--v600); background: var(--v50); color: var(--v900); }
+        .tipo-at b { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--n900); }
+        .tipo-at.cero { color: var(--n500); }
+        .tipo-at.cero b { color: var(--n400); }
+        .punto { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--n300); }
+        .punto--voluntario { background: var(--v600); }
+        .punto--obligatorio { background: var(--amb); }
+        .tipo-celda { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+        .tipo-celda .nombre { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--n900); }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes-rapidos', texto: 'Nuevo reporte', icono: 'file-plus', estilo: 'btn-ghost' },
+        { href: '/login', texto: 'Acceso', icono: 'login', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Seguridad operacional · SMS</span>
+                <h1>Reportes y seguimientos SMS en el AIFA</h1>
+                <p>Panel de seguimiento general de los hallazgos reportados y su atención por área.</p>
+            </header>
+
+<%- include('partials/sms-nav', { actual: 'reportes' }) %>
+
+            <!-- Indicadores
+                 Cada tarjeta: icono, nombre, cifra, variación contra el periodo
+                 anterior (mismos filtros) y detalle. Las que tienen data-atajo
+                 filtran la tabla al tocarlas. El cálculo de la variación está
+                 en lib/sms/spi.js (periodoIndicadores) y lib/sms/consultas.js
+                 (comparacionIndicadores). -->
+<%
+    const gruposKpi = [
+        { id: 'kpisEstatus', titulo: 'Estatus de los reportes', cuadre: true, tarjetas: [
+            { k: 'total', t: 'Total de reportes', ic: 'inbox', tono: 'brand',
+              tip: 'Reportes que cumplen los filtros. Cada reporte cuenta una sola vez aunque esté asignado a varias áreas.' },
+            { k: 'nuevos', t: 'Nuevos', ic: 'file-plus', tono: 'warn', atajo: 'estado', valor: 'A', d: 'A · Generado',
+              tip: 'Filtrar: estatus A · Generado (aún sin atender)' },
+            { k: 'atencion', t: 'En atención', ic: 'activity', tono: 'info', atajo: 'estado', valor: 'atencion', d: 'B · Enterado y C · En atención',
+              tip: 'Filtrar: B · Enterado y C · En atención' },
+            { k: 'resueltos', t: 'Resueltos', ic: 'ok', tono: 'ok', atajo: 'estado', valor: 'D', d: 'D · Resuelto',
+              tip: 'Filtrar: D · Resuelto (el hallazgo se atendió)' },
+            { k: 'sinaccion', t: 'Cerrados sin acción', ic: 'ban', tono: 'neutro', atajo: 'estado', valor: 'sin_accion', d: 'E · Duplicado · F · No requiere',
+              tip: 'Filtrar: cerrados sin acción. E · Duplicado de otro reporte o F · No requiere atención' },
+            { k: 'cerrados', t: 'Reportes cerrados', ic: 'pie', tono: 'ok', atajo: 'estado', valor: 'cerrados',
+              tip: 'Porcentaje del total que ya está cerrado. Filtrar: todos los cerrados (Resuelto, Duplicado y No requiere atención)' }
+        ] },
+        { id: 'kpisGestion', titulo: 'Gestión, plazos y riesgo', tarjetas: [
+            { k: 'enplazo', t: 'Cumplimiento de plazos', ic: 'gauge', tono: 'ok', atajo: 'vencimiento', valor: 'cerrado_en_plazo',
+              tip: 'De los reportes cerrados que tenían plazo (fecha compromiso o plazo por nivel de riesgo), porcentaje cerrado a más tardar en esa fecha. Filtrar: cerrados en plazo' },
+            { k: 'tiempo', t: 'Tiempo de resolución', ic: 'clock', tono: 'info',
+              tip: 'Desde la fecha del reporte hasta su registro como Resuelto. Solo cuenta los Resueltos; Duplicado y No requiere atención no se consideran resoluciones. La mediana no se distorsiona por casos extremos.' },
+            { k: 'alto', t: 'Alto riesgo', ic: 'shield', tono: 'crit', atajo: 'riesgo', valor: 'altos',
+              tip: 'Filtrar: reportes cuyo riesgo vigente es de nivel alto según la matriz' },
+            { k: 'pendeval', t: 'Pendientes de evaluar', ic: 'help', tono: 'warn', atajo: 'riesgo', valor: 'pendiente_evaluar',
+              tip: 'Filtrar: reportes abiertos que aún no tienen evaluación de riesgo' },
+            { k: 'vencidos', t: 'Vencidos', ic: 'crit', tono: 'crit', atajo: 'vencimiento', valor: 'vencidos',
+              tip: 'Filtrar: abiertos cuya fecha compromiso o plazo ya pasó' },
+            { k: 'proximos', t: 'Próximos a vencer', ic: 'hourglass', tono: 'warn', atajo: 'vencimiento', valor: 'proximos',
+              tip: 'Filtrar: abiertos que vencen dentro de los días de aviso configurados' }
+        ] }
+    ];
+%>
+            <section aria-labelledby="tituloIndicadores">
+                <h2 class="sr-only" id="tituloIndicadores">Indicadores</h2>
+<% gruposKpi.forEach(function (g) { %>
+                <div class="kpi-grupo">
+                    <div class="kpi-grupo__t"><span class="sg-eyebrow"><%= g.titulo %></span><small class="kpi-periodo"></small></div>
+                    <div class="sg-kpis sg-kpis--6 is-cargando" id="<%= g.id %>">
+<%     g.tarjetas.forEach(function (c) { %>
+                        <<%= c.atajo ? 'button' : 'div' %> class="sg-kpi kpi"<% if (c.atajo) { %> type="button" data-atajo="<%= c.atajo %>" data-valor="<%= c.valor %>" aria-pressed="false"<% } else { %> tabindex="0"<% } %> data-tip="<%= c.tip %>">
+                            <div class="l"><span class="kpi__ic kpi__ic--<%= c.tono %>"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-<%= c.ic %>"/></svg></span><span class="kpi__t"><%= c.t %></span></div>
+                            <div class="n" id="kpi-<%= c.k %>">—</div>
+                            <div class="kpi__var" id="kpi-<%= c.k %>-v"><span class="skel kpi__skel" aria-hidden="true"></span></div>
+                            <div class="d" id="kpi-<%= c.k %>-d"><% if (c.d) { %><%= c.d %><% } else { %><span class="skel skel--media" aria-hidden="true"></span><% } %></div>
+                        </<%= c.atajo ? 'button' : 'div' %>>
+<%     }); %>
+                    </div>
+<%     if (g.cuadre) { %>
+                    <p class="cuadre" id="cuadre" aria-live="polite"></p>
+<%     } %>
+                </div>
+<% }); %>
+                <p class="nota-kpi">
+                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-info"/></svg>
+                    <span id="notaKpi">Las cifras corresponden a los filtros activos. Toca una tarjeta para filtrar.</span>
+                    <button type="button" class="ayuda" aria-label="Cómo se calcula la variación" data-tip="Variación: cada cifra se compara con la misma cifra calculada con los mismos filtros sobre los reportes con fecha en el periodo anterior de igual duración (sin periodo elegido: los últimos 30 días frente a los 30 previos). En ambos periodos el estatus es el vigente hoy. Los porcentajes cambian en puntos (pts). Verde: mejora · rojo: empeora · gris: sin juicio de valor."><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-help"/></svg></button>
+                </p>
+            </section>
+
+            <!-- Filtros -->
+            <section class="sg-card filtros-card" style="margin-top:22px" aria-labelledby="tituloFiltros">
+                <h2 class="sr-only" id="tituloFiltros">Filtros de búsqueda</h2>
+                <div class="sg-card__body">
+                    <form id="formFiltros" novalidate>
+                        <div class="filtros-principal">
+                            <div class="sg-field">
+                                <label for="f_folio">Folio</label>
+                                <div class="campo-ic">
+                                    <input type="text" id="f_folio" name="folio" placeholder="RSM-54" autocomplete="off" maxlength="50" spellcheck="false">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-tag"/></svg>
+                                </div>
+                            </div>
+                            <div class="sg-field">
+                                <label for="f_q">Palabras clave</label>
+                                <div class="campo-ic">
+                                    <input type="search" id="f_q" name="q" placeholder="Descripción, ubicación, categoría o seguimiento" autocomplete="off" maxlength="120">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg>
+                                </div>
+                            </div>
+                            <div class="sg-field">
+                                <label for="f_estado">Estatus</label>
+                                <select id="f_estado" name="estado">
+                                    <option value="">Todos</option>
+                                    <option value="abiertos">Abiertos (sin cerrar)</option>
+                                    <option value="A">A · Generado</option>
+                                    <option value="B">B · Enterado</option>
+                                    <option value="C">C · En atención</option>
+                                    <option value="atencion">Enterado o En atención</option>
+                                    <option value="cerrados">Cerrados (D, E y F)</option>
+                                    <option value="D">D · Resuelto</option>
+                                    <option value="E">E · Duplicado</option>
+                                    <option value="F">F · No requiere atención</option>
+                                    <option value="sin_accion">Duplicado o No requiere atención</option>
+                                </select>
+                            </div>
+                            <div class="sg-field">
+                                <label for="f_riesgo">Nivel de riesgo</label>
+                                <select id="f_riesgo" name="riesgo">
+                                    <option value="">Todos</option>
+                                    <option value="altos">Alto riesgo</option>
+                                    <option value="pendiente_evaluar">Pendientes de evaluar (abiertos)</option>
+                                    <option value="sin_evaluar">Sin evaluar (todos)</option>
+                                </select>
+                            </div>
+                            <div class="acciones">
+                                <button type="button" class="btn btn-secondary btn-mas" id="btnMasFiltros" aria-expanded="false" aria-controls="filtrosMas">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-filter"/></svg>Más filtros <span class="cuenta-filtros" id="cuentaAvanzados"></span>
+                                    <svg class="ic ic-chev" aria-hidden="true"><use href="/img/icons.svg#i-chevron-down"/></svg>
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg>Buscar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="filtros-mas" id="filtrosMas" hidden>
+                            <div class="grupo-t">Periodo</div>
+                            <div class="presets" role="group" aria-label="Periodos rápidos">
+                                <button type="button" class="preset" data-preset="hoy" aria-pressed="false">Hoy</button>
+                                <button type="button" class="preset" data-preset="ayer" aria-pressed="false">Ayer</button>
+                                <button type="button" class="preset" data-preset="7" aria-pressed="false">Últimos 7 días</button>
+                                <button type="button" class="preset" data-preset="30" aria-pressed="false">Últimos 30 días</button>
+                                <button type="button" class="preset" data-preset="mes" aria-pressed="false">Mes actual</button>
+                                <button type="button" class="preset" data-preset="mes_anterior" aria-pressed="false">Mes anterior</button>
+                                <button type="button" class="preset" data-preset="90" aria-pressed="false">Últimos 90 días</button>
+                                <button type="button" class="preset" data-preset="anio" aria-pressed="false">Este año</button>
+                            </div>
+                            <div class="filtros-grid">
+                                <div class="sg-field">
+                                    <label for="f_fecha">Fecha específica</label>
+                                    <input type="date" id="f_fecha" name="fecha">
+                                </div>
+                                <div class="sg-field sg-field--rango">
+                                    <label for="f_desde">Rango de fechas</label>
+                                    <div class="rango">
+                                        <input type="date" id="f_desde" name="desde" aria-label="Desde">
+                                        <input type="date" id="f_hasta" name="hasta" aria-label="Hasta">
+                                    </div>
+                                </div>
+                                <div class="sg-field">
+                                    <label for="f_area">Área involucrada</label>
+                                    <select id="f_area" name="area"><option value="">Todas</option></select>
+                                </div>
+                                <div class="sg-field">
+                                    <label for="f_responsable">Área responsable <button type="button" class="ayuda" data-tip="Área marcada como responsable del reporte, de su fecha compromiso o de alguna acción correctiva" aria-label="Ayuda"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-help"/></svg></button></label>
+                                    <select id="f_responsable" name="responsable"><option value="">Todas</option></select>
+                                </div>
+                                <div class="sg-field">
+                                    <label for="f_categoria">Tipo de hallazgo</label>
+                                    <select id="f_categoria" name="categoria"><option value="">Todos</option></select>
+                                </div>
+                                <div class="sg-field">
+                                    <label for="f_tipo">Tipo de reporte</label>
+                                    <select id="f_tipo" name="tipo"><option value="">Todos</option></select>
+                                </div>
+                                <div class="sg-field">
+                                    <label for="f_vencimiento">Plazo (semáforo)</label>
+                                    <select id="f_vencimiento" name="vencimiento">
+                                        <option value="">Todos</option>
+                                        <optgroup label="Abiertos">
+                                            <option value="vencidos">Vencidos</option>
+                                            <option value="proximos">Próximos a vencer</option>
+                                            <option value="en_tiempo">En tiempo</option>
+                                            <option value="sin_fecha">Sin plazo</option>
+                                        </optgroup>
+                                        <optgroup label="Cerrados">
+                                            <option value="cerrado_en_plazo">Cerrados en plazo</option>
+                                            <option value="cerrado_fuera">Cerrados fuera de plazo</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="sg-field" id="campoZona" hidden>
+                                    <label for="f_zona">Zona del aeropuerto</label>
+                                    <select id="f_zona" name="zona"><option value="">Todas</option></select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="activos" id="filtrosActivos" hidden aria-live="polite">
+                        <span class="activos__t">Filtros activos:</span>
+                        <span id="chipsActivos" style="display:contents"></span>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btnRestablecer">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-refresh"/></svg>Restablecer filtros
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tipo de reporte: cuántos hay de cada uno con los filtros activos; tocar uno filtra -->
+            <section class="tipos-barra" id="tiposBarra" aria-labelledby="tituloTipos" hidden>
+                <div class="tipos-barra__cab">
+                    <h2 id="tituloTipos">Tipo de reporte</h2>
+                    <p id="tiposNota">Toca un tipo para filtrar la tabla.</p>
+                </div>
+                <div class="tipos-lista" id="tiposLista" role="group" aria-labelledby="tituloTipos"></div>
+            </section>
+
+            <!-- Resultados -->
+            <div class="tabla-barra">
+                <div>
+                    <h2>Resultados</h2>
+                    <div class="barra-res">
+                        <div class="contador" id="contador" aria-live="polite">Cargando…</div>
+                        <nav class="pag-mini" id="pagMini" aria-label="Paginación rápida"></nav>
+                    </div>
+                </div>
+                <div class="tabla-barra__der">
+                    <div class="orden-sel">
+                        <label for="ordenCampo" class="contador">Ordenar por</label>
+                        <select id="ordenCampo">
+                            <option value="fecha">Fecha del reporte</option>
+                            <option value="prioridad">Prioridad (nivel de riesgo)</option>
+                            <option value="actualizacion">Última actualización</option>
+                            <option value="vencimiento">Plazo (vence primero)</option>
+                            <option value="folio">Folio</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-icon" id="ordenDir" data-tip="Cambiar la dirección del orden">
+                            <svg class="ic" aria-hidden="true"><use id="ordenDirIc" href="/img/icons.svg#i-sort-desc"/></svg>
+                        </button>
+                    </div>
+                    <div class="menu">
+                        <button type="button" class="btn btn-secondary" data-menu aria-haspopup="true" aria-expanded="false">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-list"/></svg><span>Columnas</span>
+                        </button>
+                        <div class="menu__panel" id="menuColumnas" hidden>
+                            <div class="menu__t">Columnas visibles</div>
+                        </div>
+                    </div>
+                    <div class="menu">
+                        <button type="button" class="btn btn-secondary" data-menu aria-haspopup="true" aria-expanded="false">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-download"/></svg><span>Exportar</span>
+                        </button>
+                        <div class="menu__panel" hidden>
+                            <div class="menu__t">Con los filtros activos</div>
+                            <button type="button" class="menu__item" id="expExcel">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg>
+                                <span>Excel (.xlsx)…<small>Datos, indicadores, comparativas y filtros</small></span>
+                            </button>
+                            <button type="button" class="menu__item" id="expPdf">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>
+                                <span>PDF…<small>Resumen ejecutivo, gráficas, tablas y listado</small></span>
+                            </button>
+                            <div class="menu__sep"></div>
+                            <button type="button" class="menu__item" id="expImprimir">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg>
+                                <span>Informe ejecutivo para imprimir<small>Vista de impresión del navegador</small></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="barra-carga" id="barraCarga" hidden></div>
+
+            <div class="tabla-estado" id="zonaResultados" aria-busy="true">
+                <div class="sg-table-wrap tabla-escritorio" id="envolturaTabla">
+                    <div class="tabla-scroll">
+                        <table class="sg-table" id="tablaReportes">
+                            <caption class="sr-only">Reportes de hallazgos con su estatus, riesgo y semáforo de plazo</caption>
+                            <thead><tr id="encabezados"></tr></thead>
+                            <tbody id="cuerpoTabla"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tarjetas-rep" id="tarjetas" aria-label="Reportes"></div>
+            </div>
+
+            <div class="paginacion">
+                <div class="por-pagina">
+                    <label for="porPagina">Mostrar</label>
+                    <select id="porPagina">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span>por página</span>
+                </div>
+                <nav class="paginacion__pags" id="paginas" aria-label="Paginación"></nav>
+            </div>
+            <div class="leyenda-semaforo" aria-label="Significado del semáforo de plazos" id="leyendaSemaforo"></div>
+        </div>
+    </main>
+
+    <!-- Vista rápida -->
+    <div class="sg-drawer-fondo" id="qvFondo" hidden></div>
+    <aside class="sg-drawer" id="qv" role="dialog" aria-modal="true" aria-labelledby="qvTitulo" hidden>
+        <div class="sg-drawer__head">
+            <div>
+                <span class="sg-eyebrow">Vista rápida</span>
+                <h2 id="qvTitulo" style="font-size:20px;margin-top:4px">Reporte</h2>
+                <div id="qvEstado" style="margin-top:8px"></div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-icon" id="qvCerrar" aria-label="Cerrar vista rápida">
+                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-x"/></svg>
+            </button>
+        </div>
+        <div class="sg-drawer__body" id="qvCuerpo"></div>
+        <div class="sg-drawer__foot">
+            <a class="btn btn-secondary" id="qvHistorial" href="#"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-history"/></svg>Historial</a>
+            <a class="btn btn-primary" id="qvDetalle" href="#"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>Ver detalle y gestión</a>
+        </div>
+    </aside>
+
+<%- include('partials/footer') %>
+
+    <script src="/js/sms-exportacion.js"></script>
+    <script src="/js/sms-exportar.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        function pl(n, uno, varios) { return SMS.numero(n) + ' ' + (n === 1 ? uno : varios); }
+
+        var CAMPOS = ['folio', 'q', 'fecha', 'desde', 'hasta', 'area', 'responsable', 'categoria', 'tipo', 'estado', 'riesgo', 'vencimiento', 'zona'];
+        var AVANZADOS = ['fecha', 'desde', 'hasta', 'area', 'responsable', 'categoria', 'tipo', 'vencimiento', 'zona'];
+        var COLUMNAS = [
+            { k: 'folio', t: 'Folio', fija: true, orden: 'folio' },
+            { k: 'fecha', t: 'Fecha', orden: 'fecha' },
+            { k: 'area', t: 'Área', orden: 'area' },
+            { k: 'tipo', t: 'Tipo de reporte' },
+            { k: 'categoria', t: 'Categoría del hallazgo', orden: 'categoria' },
+            { k: 'descripcion', t: 'Descripción y último seguimiento' },
+            { k: 'seguimiento', t: 'Último seguimiento (columna aparte)', oculta: true },
+            { k: 'estado', t: 'Estatus', fija: true, orden: 'estado' },
+            { k: 'riesgo', t: 'Riesgo', orden: 'prioridad' },
+            { k: 'vencimiento', t: 'Plazo', orden: 'vencimiento' },
+            { k: 'acciones', t: 'Acciones', fija: true }
+        ];
+        // Columnas que se integran en otra cuando no hay espacio (en este orden)
+        var PLIEGUES = [
+            { k: 'area', en: 'categoria', t: 'Área' },
+            { k: 'tipo', en: 'categoria', t: 'Tipo de reporte' },
+            { k: 'riesgo', en: 'estado', t: 'Riesgo' },
+            { k: 'fecha', en: 'folio', t: 'Fecha' },
+            { k: 'vencimiento', en: 'estado', t: 'Plazo' }
+        ];
+        var CLAVE_COLS = 'sms-columnas-v1';
+
+        var estado = { filtros: {}, orden: { campo: 'fecha', dir: 'desc' }, pagina: 1, por_pagina: 25 };
+        var catalogos = { niveles: [], dias_aviso: 7 };
+        var ocultas = leerOcultas();
+        var plegadas = [];
+        var controlador = null;
+        var ultimoDisparador = null;
+        var ultimosDatos = null;
+        // Último conteo por tipo y los filtros con que se calculó (sin el de tipo)
+        var conteoPrevio = null;
+        var puedeEliminar = false;
+
+        // ---------------------------------------------------------- estado/URL
+        function leerURL() {
+            var p = new URLSearchParams(location.search);
+            CAMPOS.forEach(function (c) { var v = p.get(c); if (v) estado.filtros[c] = v; });
+            if (p.get('orden')) estado.orden.campo = p.get('orden');
+            if (p.get('dir')) estado.orden.dir = p.get('dir') === 'asc' ? 'asc' : 'desc';
+            if (+p.get('pagina') > 0) estado.pagina = +p.get('pagina');
+            if ([10, 25, 50, 100].indexOf(+p.get('por_pagina')) >= 0) estado.por_pagina = +p.get('por_pagina');
+        }
+        function qsFiltros() {
+            var p = new URLSearchParams();
+            CAMPOS.forEach(function (c) { if (estado.filtros[c]) p.set(c, estado.filtros[c]); });
+            return p;
+        }
+        function qsCompleto() {
+            var p = qsFiltros();
+            if (estado.orden.campo !== 'fecha') p.set('orden', estado.orden.campo);
+            if (estado.orden.dir !== 'desc') p.set('dir', estado.orden.dir);
+            if (estado.pagina > 1) p.set('pagina', estado.pagina);
+            if (estado.por_pagina !== 25) p.set('por_pagina', estado.por_pagina);
+            return p;
+        }
+        function escribirURL() {
+            var q = qsCompleto().toString();
+            history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+            var fq = qsFiltros().toString();
+            $('enlaceAnalisis').href = '/reportes/analisis' + (fq ? '?' + fq : '');
+        }
+
+        function pintarFormulario() {
+            CAMPOS.forEach(function (c) { var e = $('f_' + c); if (e) e.value = estado.filtros[c] || ''; });
+            $('ordenCampo').value = estado.orden.campo;
+            $('ordenDirIc').setAttribute('href', '/img/icons.svg#i-sort-' + estado.orden.dir);
+            $('ordenDir').setAttribute('aria-label', estado.orden.dir === 'desc' ? 'Orden descendente' : 'Orden ascendente');
+            $('porPagina').value = String(estado.por_pagina);
+            var n = AVANZADOS.filter(function (c) { return estado.filtros[c]; }).length;
+            if (estado.filtros.desde && estado.filtros.hasta) n--;
+            $('cuentaAvanzados').textContent = n > 0 ? String(n) : '';
+            document.querySelectorAll('[data-atajo]').forEach(function (b) {
+                b.setAttribute('aria-pressed', estado.filtros[b.dataset.atajo] === b.dataset.valor ? 'true' : 'false');
+            });
+            document.querySelectorAll('.preset').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.preset === presetActual() ? 'true' : 'false'); });
+        }
+
+        function leerFormulario() {
+            CAMPOS.forEach(function (c) {
+                var e = $('f_' + c);
+                if (!e) return;
+                var v = e.value.trim();
+                if (v) estado.filtros[c] = v; else delete estado.filtros[c];
+            });
+            if (estado.filtros.fecha) { delete estado.filtros.desde; delete estado.filtros.hasta; }
+        }
+
+        // --------------------------------------------------------- presets
+        // Periodos rápidos: mismos cálculos que el análisis (SMS.rangoPeriodo)
+        var PRESETS = ['hoy', 'ayer', '7', '30', 'mes', 'mes_anterior', '90', 'anio'];
+        function rangoPreset(p) { return SMS.rangoPeriodo(p); }
+        function presetActual() {
+            var f = estado.filtros;
+            if (f.fecha) return null;
+            return SMS.periodoActivo(f.desde, f.hasta, PRESETS);
+        }
+
+        // ------------------------------------------------------- catálogos
+        async function cargarCatalogos() {
+            try {
+                var d = await SMS.api('/api/sms/catalogos');
+                catalogos = d;
+                // Activos primero; los inactivos en un grupo aparte (siguen sirviendo para filtrar el historial)
+                var opciones = function (lista, etiquetaInactivos) {
+                    var opc = function (x) { return '<option value="' + x.id + '">' + esc(x.nombre) + '</option>'; };
+                    var inactivos = lista.filter(function (x) { return !x.activo; });
+                    return '<option value="">Todas</option>' + lista.filter(function (x) { return x.activo; }).map(opc).join('') +
+                        (inactivos.length ? '<optgroup label="' + etiquetaInactivos + '">' + inactivos.map(opc).join('') + '</optgroup>' : '');
+                };
+                var areas = opciones(d.departamentos, 'Áreas inactivas (históricas)');
+                $('f_area').innerHTML = areas;
+                $('f_responsable').innerHTML = areas;
+                $('f_categoria').innerHTML = '<option value="">Todos</option>' + d.categorias.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+                $('f_tipo').innerHTML = '<option value="">Todos</option>' + (d.tipos_reporte || []).map(function (t) { return '<option value="' + esc(t.clave) + '">' + esc(t.nombre) + '</option>'; }).join('') +
+                    '<option value="sin_clasificar">Sin clasificar</option>';
+                (d.tipos_reporte || []).forEach(function (t) { GRUPO_TIPO[t.clave] = t.grupo; });
+                var r = $('f_riesgo');
+                d.niveles.forEach(function (n) { var o = document.createElement('option'); o.value = n.clave; o.textContent = 'Nivel: ' + n.nombre; r.appendChild(o); });
+                if (d.zonas_habilitado && d.zonas.length) {
+                    $('campoZona').hidden = false;
+                    $('f_zona').innerHTML = '<option value="">Todas</option>' + d.zonas.map(function (z) { return '<option value="' + z.id + '">' + esc(z.codigo + ' · ' + z.nombre) + (z.activo ? '' : ' (inactiva)') + '</option>'; }).join('');
+                }
+                $('leyendaSemaforo').innerHTML = '<span style="font-weight:600">Semáforo de plazos:</span>' +
+                    ['vencido', 'proximo', 'en_tiempo', 'sin_plazo'].map(function (k) { return SMS.semaforo({}, d.dias_aviso, { estado: k, sinDetalle: true }); }).join('') +
+                    '<span>“Próximo” = vence en ' + d.dias_aviso + ' días o menos.</span>';
+                pintarFormulario();
+            } catch (e) {
+                SAGA.toast('No se pudieron cargar los catálogos de filtros', 'warning');
+            }
+        }
+
+        // ------------------------------------------------------- columnas
+        function leerOcultas() {
+            var porDefecto = COLUMNAS.filter(function (c) { return c.oculta; }).map(function (c) { return c.k; });
+            try { var v = JSON.parse(localStorage.getItem(CLAVE_COLS)); return Array.isArray(v) ? v : porDefecto; } catch (e) { return porDefecto; }
+        }
+        function elegida(k) { return ocultas.indexOf(k) < 0; }
+        function visible(k) { return elegida(k) && plegadas.indexOf(k) < 0; }
+        function pintarMenuColumnas() {
+            var m = $('menuColumnas');
+            m.querySelectorAll('label, .menu__nota').forEach(function (l) { l.remove(); });
+            COLUMNAS.forEach(function (c) {
+                if (c.fija) return;
+                var l = document.createElement('label');
+                l.className = 'menu__item';
+                l.innerHTML = '<input type="checkbox"' + (elegida(c.k) ? ' checked' : '') + '> <span></span>';
+                l.querySelector('span').textContent = c.t;
+                var p = PLIEGUES.find(function (x) { return x.k === c.k; });
+                if (p && plegadas.indexOf(c.k) >= 0 && elegida(c.k)) {
+                    var s = document.createElement('small'); s.textContent = 'Integrada en “' + COLUMNAS.find(function (x) { return x.k === p.en; }).t + '” por espacio';
+                    l.querySelector('span').appendChild(s);
+                }
+                l.querySelector('input').addEventListener('change', function (e) {
+                    if (e.target.checked) ocultas = ocultas.filter(function (x) { return x !== c.k; });
+                    else ocultas.push(c.k);
+                    try { localStorage.setItem(CLAVE_COLS, JSON.stringify(ocultas)); } catch (er) { /* opcional */ }
+                    ajustarColumnas();
+                });
+                m.appendChild(l);
+            });
+        }
+        function pintarEncabezados() {
+            var tr = $('encabezados');
+            tr.innerHTML = '';
+            COLUMNAS.forEach(function (c) {
+                if (!visible(c.k)) return;
+                var th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'col-' + c.k;
+                if (c.orden) {
+                    var activo = estado.orden.campo === c.orden;
+                    if (activo) th.setAttribute('aria-sort', estado.orden.dir === 'asc' ? 'ascending' : 'descending');
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'ordenar';
+                    b.innerHTML = '<span></span>' + ic(activo ? 'sort-' + estado.orden.dir : 'sort-desc');
+                    b.querySelector('span').textContent = c.t;
+                    b.setAttribute('data-tip', 'Ordenar por ' + c.t.toLowerCase());
+                    b.addEventListener('click', function () {
+                        if (estado.orden.campo === c.orden) estado.orden.dir = estado.orden.dir === 'desc' ? 'asc' : 'desc';
+                        else { estado.orden.campo = c.orden; estado.orden.dir = c.orden === 'folio' || c.orden === 'vencimiento' ? 'asc' : 'desc'; }
+                        estado.pagina = 1;
+                        cargar();
+                    });
+                    th.appendChild(b);
+                } else {
+                    th.textContent = c.t;
+                }
+                if (c.k === 'acciones') th.innerHTML = '<span class="sr-only">Acciones</span>';
+                tr.appendChild(th);
+            });
+        }
+
+        // ----------------------------------------------------------- filas
+        function areasTexto(r) {
+            return (r.areas_responsables.length ? r.areas_responsables : r.areas_notificadas);
+        }
+        function areasHTML(r) {
+            var lista = areasTexto(r);
+            if (!lista.length) return '<span class="nd">Sin área asignada</span>';
+            var html = '<div class="areas-celda"><span>' + esc(lista[0]) + '</span>';
+            if (lista.length > 1) html += '<span class="mas" data-tip="' + esc(lista.join(' · ')) + '" tabindex="0">+' + (lista.length - 1) + ' área' + (lista.length > 2 ? 's' : '') + '</span>';
+            if (!r.areas_responsables.length) html += '<span class="mas" data-tip="Áreas notificadas; ninguna está marcada como responsable" tabindex="0">Notificada</span>';
+            return html + '</div>';
+        }
+        function botonesHTML(r) {
+            var f = encodeURIComponent(r.folio);
+            return '<div class="acciones-fila">' +
+                '<button type="button" class="btn btn-secondary btn-sm btn-icon" data-qv="' + esc(r.folio) + '" data-tip="Vista rápida" aria-label="Vista rápida de ' + esc(r.folio) + '">' + ic('eye') + '</button>' +
+                '<a class="btn btn-secondary btn-sm btn-icon" href="/reportes/' + f + '/historial" data-tip="Historial de seguimientos" aria-label="Historial de ' + esc(r.folio) + '">' + ic('history') + '</a>' +
+                '<a class="btn btn-secondary btn-sm btn-icon" href="/reportes/' + f + '" data-tip="Detalle y gestión" aria-label="Detalle de ' + esc(r.folio) + '">' + ic('doc') + '</a>' +
+                (puedeEliminar ? '<button type="button" class="btn btn-secondary btn-sm btn-icon btn-borrar" data-eliminar="' + esc(r.folio) + '" data-tip="Eliminar reporte" aria-label="Eliminar ' + esc(r.folio) + '">' + ic('trash') + '</button>' : '') +
+                '</div>';
+        }
+        function riesgoHTML(r) {
+            var h = SMS.riesgo(r.riesgo, catalogos.niveles);
+            if (r.riesgo && r.riesgo.tipo === 'residual') h += '<span class="sub" data-tip="Riesgo residual: evaluado después de aplicar medidas de mitigación' + (r.riesgo_inicial ? '. Inicial: ' + esc(r.riesgo_inicial.indice) : '') + '">Residual</span>';
+            return h;
+        }
+        function plazoHTML(r) {
+            return SMS.semaforo(r, catalogos.dias_aviso, { textoSinPlazo: r.acciones.total ? 'sin fecha abierta' : 'sin fecha compromiso' });
+        }
+        function descripcionHTML(r) {
+            var seg = !elegida('seguimiento') && r.ultimo_seguimiento
+                ? '<div class="seg-sub">' + ic('message') + '<span class="clamp-3" data-clamp>' + '<span class="sr-only">Último seguimiento' + (r.folio_seguimiento ? ' ' + esc(r.folio_seguimiento) : '') + ': </span>' + esc(r.ultimo_seguimiento) + '</span></div>' : '';
+            return '<div class="desc-wrap"><div class="clamp-3 desc-celda" data-clamp>' + esc(r.descripcion) + '</div>' + seg +
+                '<button type="button" class="ver-mas" hidden aria-expanded="false">Ver más' + ic('chevron-down') + '</button></div>';
+        }
+        var GRUPO_TIPO = {};
+        function tipoHTML(r) {
+            var tipo = r.tipo_reporte_nombre
+                ? '<span class="nombre"><span class="punto punto--' + esc(GRUPO_TIPO[r.tipo_reporte] || '') + '" aria-hidden="true"></span>' + esc(r.tipo_reporte_nombre) + '</span>'
+                : '<span class="nd">Sin clasificar</span>';
+            return '<div class="tipo-celda">' + tipo + '</div>';
+        }
+        function plegado(k, r) {
+            switch (k) {
+                case 'area': var l = areasTexto(r); return l.length ? esc(l.join(' · ')) : '<span class="nd">Sin área asignada</span>';
+                case 'tipo': return tipoHTML(r);
+                case 'riesgo': return riesgoHTML(r);
+                case 'fecha': return SMS.fecha(r.fecha);
+                case 'vencimiento': return plazoHTML(r);
+            }
+            return '';
+        }
+        function celda(c, r) {
+            var html;
+            switch (c) {
+                case 'folio': html = '<button type="button" class="folio-btn" data-qv="' + esc(r.folio) + '" data-tip="Vista rápida"><span class="sg-folio">' + esc(r.folio) + '</span></button>'; break;
+                case 'fecha': html = SMS.fecha(r.fecha) + '<span class="sub">Act. ' + SMS.fecha(r.fecha_actualizacion) + '</span>'; break;
+                case 'area': html = areasHTML(r); break;
+                case 'tipo': html = tipoHTML(r); break;
+                case 'categoria': html = '<strong style="font-weight:600">' + esc(r.tipo_problema) + '</strong>' + (r.zona ? '<span class="sub">' + ic('pin', 'ic-16') + ' ' + esc(r.zona.nombre) + '</span>' : ''); break;
+                case 'descripcion': html = descripcionHTML(r); break;
+                case 'seguimiento': html = r.ultimo_seguimiento ? '<div class="clamp-3">' + esc(r.ultimo_seguimiento) + '</div>' + (r.folio_seguimiento ? '<span class="sub mono">' + esc(r.folio_seguimiento) + '</span>' : '') : '<span class="nd">Sin descripción</span>'; break;
+                case 'estado': html = '<div class="estado-celda">' + SMS.estado(r.estado) + (r.acciones.por_verificar ? '<span class="sg-chip" data-tip="Acciones concluidas pendientes de verificar su efectividad">' + ic('user-check') + r.acciones.por_verificar + ' por verificar</span>' : '') + '</div>'; break;
+                case 'riesgo': html = riesgoHTML(r); break;
+                case 'vencimiento': html = plazoHTML(r); break;
+                case 'acciones': html = botonesHTML(r); break;
+                default: html = '';
+            }
+            PLIEGUES.forEach(function (p) {
+                if (p.en === c && plegadas.indexOf(p.k) >= 0 && elegida(p.k)) html += '<span class="pliegue">' + plegado(p.k, r) + '</span>';
+            });
+            return html;
+        }
+
+        function vacioHTML(cols) {
+            var hayFiltros = Object.keys(estado.filtros).length > 0;
+            return '<tr><td colspan="' + cols + '"><div class="sg-empty">' + ic(hayFiltros ? 'search' : 'inbox') +
+                '<b>' + (hayFiltros ? 'Ningún reporte coincide con los filtros' : 'Aún no hay reportes registrados') + '</b>' +
+                (hayFiltros ? 'Prueba con otros criterios o <button type="button" class="btn btn-ghost btn-sm" data-restablecer>restablece los filtros</button>' : 'Los reportes aparecerán aquí en cuanto se registren.') +
+                '</div></td></tr>';
+        }
+
+        function esqueleto() {
+            var cols = COLUMNAS.filter(function (c) { return visible(c.k); });
+            var filas = '';
+            for (var i = 0; i < 6; i++) {
+                filas += '<tr aria-hidden="true">' + cols.map(function (c) {
+                    var w = c.k === 'descripcion' ? '<span class="skel"></span><span class="skel skel--media"></span>' : '<span class="skel' + (i % 2 ? ' skel--media' : '') + '"></span>';
+                    return '<td class="col-' + c.k + '">' + w + '</td>';
+                }).join('') + '</tr>';
+            }
+            $('cuerpoTabla').innerHTML = filas;
+            $('tarjetas').innerHTML = [1, 2, 3].map(function () { return '<div class="tarjeta-rep" aria-hidden="true"><span class="skel skel--corta"></span><span class="skel"></span><span class="skel skel--media"></span></div>'; }).join('');
+        }
+
+        function pintarFilas(d) {
+            if (!d) return;
+            var cols = COLUMNAS.filter(function (c) { return visible(c.k); });
+            var cuerpo = $('cuerpoTabla');
+            if (!d.reportes.length) {
+                cuerpo.innerHTML = vacioHTML(cols.length);
+                $('tarjetas').innerHTML = '<div class="sg-card">' + vacioHTML(1).replace(/<\/?t[rd][^>]*>/g, '') + '</div>';
+                return;
+            }
+            cuerpo.innerHTML = d.reportes.map(function (r) {
+                return '<tr class="is-fila">' + cols.map(function (c) { return '<td class="col-' + c.k + '">' + celda(c.k, r) + '</td>'; }).join('') + '</tr>';
+            }).join('');
+            $('tarjetas').innerHTML = d.reportes.map(function (r) {
+                var areas = areasTexto(r).join(', ') || 'Sin área asignada';
+                return '<article class="tarjeta-rep">' +
+                    '<div class="tarjeta-rep__top"><span class="sg-folio">' + esc(r.folio) + '</span>' + SMS.estado(r.estado) + '</div>' +
+                    '<h3>' + esc(r.tipo_problema) + '</h3>' +
+                    '<div class="desc-wrap"><p class="clamp-3 desc-celda" data-clamp>' + esc(r.descripcion) + '</p><button type="button" class="ver-mas" hidden aria-expanded="false">Ver más' + ic('chevron-down') + '</button></div>' +
+                    '<dl><dt>Fecha</dt><dd>' + SMS.fecha(r.fecha) + '</dd>' +
+                    (r.tipo_reporte_nombre ? '<dt>Tipo</dt><dd>' + esc(r.tipo_reporte_nombre) + '</dd>' : '') +
+                    '<dt>Área</dt><dd>' + esc(areas) + '</dd>' +
+                    (r.zona ? '<dt>Zona</dt><dd>' + esc(r.zona.nombre) + '</dd>' : '') +
+                    '<dt>Riesgo</dt><dd>' + riesgoHTML(r) + '</dd>' +
+                    '<dt>Plazo</dt><dd>' + plazoHTML(r) + '</dd></dl>' +
+                    '<div class="tarjeta-rep__acc">' +
+                    '<button type="button" class="btn btn-secondary btn-sm" data-qv="' + esc(r.folio) + '">' + ic('eye') + 'Vista rápida</button>' +
+                    '<a class="btn btn-secondary btn-sm" href="/reportes/' + encodeURIComponent(r.folio) + '">' + ic('doc') + 'Detalle</a>' +
+                    (puedeEliminar ? '<button type="button" class="btn btn-secondary btn-sm btn-icon btn-borrar" style="flex:none" data-eliminar="' + esc(r.folio) + '" aria-label="Eliminar ' + esc(r.folio) + '">' + ic('trash') + '</button>' : '') +
+                    '</div></article>';
+            }).join('');
+        }
+
+        // Muestra "Ver más" solo donde el texto está recortado
+        function revisarVerMas() {
+            document.querySelectorAll('#zonaResultados .desc-wrap').forEach(function (w) {
+                var b = w.querySelector('.ver-mas');
+                if (!b || b.getAttribute('aria-expanded') === 'true') return;
+                var recortado = Array.prototype.some.call(w.querySelectorAll('[data-clamp]'), function (el) { return el.offsetParent !== null && el.scrollHeight > el.clientHeight + 1; });
+                b.hidden = !recortado;
+            });
+        }
+
+        // Pliega columnas hasta que la tabla quepa sin barra horizontal
+        var anchoPrevio = 0;
+        function ajustarColumnas() {
+            var wrap = $('envolturaTabla'), tabla = $('tablaReportes');
+            plegadas = [];
+            wrap.classList.remove('is-desborda');
+            pintarEncabezados(); pintarFilas(ultimosDatos);
+            if (wrap.offsetParent !== null && ultimosDatos) {
+                for (var i = 0; i < PLIEGUES.length && tabla.offsetWidth > wrap.clientWidth + 1; i++) {
+                    if (!elegida(PLIEGUES[i].k)) continue;
+                    plegadas.push(PLIEGUES[i].k);
+                    pintarEncabezados(); pintarFilas(ultimosDatos);
+                }
+                if (tabla.offsetWidth > wrap.clientWidth + 1) wrap.classList.add('is-desborda');
+            }
+            pintarMenuColumnas();
+            revisarVerMas();
+        }
+        if (window.ResizeObserver) {
+            var temporizadorAncho;
+            new ResizeObserver(function (e) {
+                var w = Math.round(e[0].contentRect.width);
+                if (w === anchoPrevio) return;
+                anchoPrevio = w;
+                clearTimeout(temporizadorAncho);
+                temporizadorAncho = setTimeout(ajustarColumnas, 80);
+            }).observe($('zonaResultados'));
+        }
+
+        function pintarPaginas(p) {
+            var nav = $('paginas');
+            var html = '';
+            var boton = function (n, etiqueta, opciones) {
+                opciones = opciones || {};
+                return '<button type="button" class="pag" data-pag="' + n + '"' + (opciones.actual ? ' aria-current="page"' : '') + (opciones.off ? ' disabled' : '') + ' aria-label="' + (opciones.aria || 'Página ' + n) + '">' + etiqueta + '</button>';
+            };
+            html += boton(p.pagina - 1, ic('chevron-left', 'ic-16'), { off: p.pagina <= 1, aria: 'Página anterior' });
+            var desde = Math.max(1, p.pagina - 2), hasta = Math.min(p.paginas, p.pagina + 2);
+            if (desde > 1) { html += boton(1, '1'); if (desde > 2) html += '<span class="pag-gap">…</span>'; }
+            for (var i = desde; i <= hasta; i++) html += boton(i, String(i), { actual: i === p.pagina });
+            if (hasta < p.paginas) { if (hasta < p.paginas - 1) html += '<span class="pag-gap">…</span>'; html += boton(p.paginas, String(p.paginas)); }
+            html += boton(p.pagina + 1, ic('chevron-right', 'ic-16'), { off: p.pagina >= p.paginas, aria: 'Página siguiente' });
+            nav.innerHTML = p.total ? html : '';
+            // Paginación compacta arriba de la tabla (evita bajar hasta el final)
+            $('pagMini').innerHTML = p.paginas > 1
+                ? boton(p.pagina - 1, ic('chevron-left', 'ic-16'), { off: p.pagina <= 1, aria: 'Página anterior' }) +
+                  '<span>Página ' + p.pagina + ' de ' + p.paginas + '</span>' +
+                  boton(p.pagina + 1, ic('chevron-right', 'ic-16'), { off: p.pagina >= p.paginas, aria: 'Página siguiente' })
+                : '';
+        }
+
+        function pintarActivos(lista) {
+            var cont = $('filtrosActivos');
+            var chips = $('chipsActivos');
+            chips.innerHTML = '';
+            lista.forEach(function (a) {
+                var c = document.createElement('span');
+                c.className = 'chip-filtro';
+                c.innerHTML = '<span><b></b> </span><button type="button" aria-label="Quitar filtro">' + ic('x') + '</button>';
+                c.querySelector('b').textContent = a.etiqueta + ':';
+                c.querySelector('span').appendChild(document.createTextNode(' ' + a.valor));
+                c.querySelector('button').setAttribute('aria-label', 'Quitar filtro ' + a.etiqueta);
+                c.querySelector('button').addEventListener('click', function () {
+                    if (a.clave === 'rango') { delete estado.filtros.desde; delete estado.filtros.hasta; }
+                    else delete estado.filtros[a.clave];
+                    estado.pagina = 1;
+                    pintarFormulario();
+                    cargar();
+                });
+                chips.appendChild(c);
+            });
+            cont.hidden = lista.length === 0;
+        }
+
+        // ----------------------------------------------------- indicadores
+        // Cifra de cada tarjeta a partir de los indicadores del servidor.
+        // tipo: n = conteo · pct = porcentaje (varía en puntos) · dur = días
+        // sentido: bien = subir es favorable · mal = subir es desfavorable ·
+        //          neutra = sin juicio (p. ej. más reportes no es bueno ni malo)
+        var KPIS = {
+            total:     { t: 'Total de reportes', tipo: 'n', sentido: 'neutra', v: function (i) { return i.total; } },
+            nuevos:    { t: 'Nuevos', tipo: 'n', sentido: 'mal', v: function (i) { return i.nuevos; } },
+            atencion:  { t: 'En atención', tipo: 'n', sentido: 'neutra', v: function (i) { return i.en_atencion; } },
+            resueltos: { t: 'Resueltos', tipo: 'n', sentido: 'bien', v: function (i) { return i.resueltos; } },
+            sinaccion: { t: 'Cerrados sin acción', tipo: 'n', sentido: 'neutra', v: function (i) { return i.duplicados + i.no_requiere; } },
+            cerrados:  { t: 'Reportes cerrados', tipo: 'pct', sentido: 'bien', v: function (i) { return i.porcentaje_cerrados; } },
+            enplazo:   { t: 'Cumplimiento de plazos', tipo: 'pct', sentido: 'bien', v: function (i) { return i.porcentaje_en_plazo; } },
+            tiempo:    { t: 'Tiempo de resolución (mediana)', tipo: 'dur', sentido: 'mal', v: function (i) { return i.dias_mediana_resolucion; } },
+            alto:      { t: 'Alto riesgo', tipo: 'n', sentido: 'mal', v: function (i) { return i.evaluados ? i.alto_riesgo : null; } },
+            pendeval:  { t: 'Pendientes de evaluar', tipo: 'n', sentido: 'mal', v: function (i) { return i.pendientes_evaluar; } },
+            vencidos:  { t: 'Vencidos', tipo: 'n', sentido: 'mal', v: function (i) { return i.con_fecha ? i.vencidos : null; } },
+            proximos:  { t: 'Próximos a vencer', tipo: 'n', sentido: 'neutra', v: function (i) { return i.con_fecha ? i.proximos : null; } }
+        };
+        var sinMovimiento = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        var kpisListos = false;
+
+        function cifraHTML(k, v) {
+            var tipo = KPIS[k].tipo;
+            if (tipo === 'pct') return SMS.numero(v, 1) + '<small>%</small>';
+            if (tipo === 'dur') return SMS.duracionDias(v).replace(/ (min|h|días?)$/, '<small>$1</small>');
+            return SMS.numero(Math.round(v));
+        }
+        function cifraTexto(k, v) {
+            if (v == null) return 'sin datos';
+            var tipo = KPIS[k].tipo;
+            return tipo === 'pct' ? SMS.numero(v, 1) + ' %' : tipo === 'dur' ? SMS.duracionDias(v) : SMS.numero(v);
+        }
+        // Conteo animado desde la cifra anterior (discreto; se omite con "reducir movimiento")
+        function animarCifra(el, k, de, a) {
+            if (el._raf) { cancelAnimationFrame(el._raf); el._raf = null; }
+            if (sinMovimiento || de == null || de === a || KPIS[k].tipo === 'dur') { el.innerHTML = cifraHTML(k, a); return; }
+            var inicio = null;
+            var paso = function (t) {
+                if (inicio === null) inicio = t;
+                var p = Math.min(1, (t - inicio) / 480);
+                var e = 1 - Math.pow(1 - p, 3);
+                el.innerHTML = cifraHTML(k, de + (a - de) * e);
+                el._raf = p < 1 ? requestAnimationFrame(paso) : null;
+            };
+            el._raf = requestAnimationFrame(paso);
+        }
+        // Pinta la cifra; devuelve true si cambió respecto de la anterior
+        function kpi(k, valor, detalle) {
+            var el = $('kpi-' + k);
+            var previo = el.dataset.v === undefined ? undefined : (el.dataset.v === '' ? null : Number(el.dataset.v));
+            if (valor == null) {
+                if (el._raf) { cancelAnimationFrame(el._raf); el._raf = null; }
+                el.textContent = 'Sin datos';
+                el.classList.add('nd');
+            } else {
+                el.classList.remove('nd');
+                animarCifra(el, k, previo == null ? null : previo, valor);
+            }
+            el.dataset.v = valor == null ? '' : String(valor);
+            if (detalle !== undefined && $('kpi-' + k + '-d')) $('kpi-' + k + '-d').textContent = detalle;
+            return previo !== (valor == null ? null : valor);
+        }
+
+        // --------------------------------------------- variación y tendencia
+        function rango(p) {
+            return p.desde === p.hasta ? SMS.fecha(p.desde) : SMS.fecha(p.desde) + ' – ' + SMS.fecha(p.hasta);
+        }
+        function porcentajeTexto(x) {
+            var t = SMS.numero(x, x < 10 ? 1 : 0);
+            return t === '0' ? '< 0.1' : t;
+        }
+        // Variación de una cifra entre el periodo actual y el anterior
+        function variacionHTML(k, comp) {
+            var def = KPIS[k];
+            var act = def.v(comp.valores.actual), ant = def.v(comp.valores.anterior);
+            var nombreAct = comp.automatico ? 'Últimos ' + comp.dias + ' días' : 'Periodo';
+            var nombreAnt = comp.automatico ? comp.dias + ' días previos' : 'Periodo anterior';
+            var tip = def.t + ' · ' + nombreAct + ' (' + rango(comp.actual) + '): ' + cifraTexto(k, act) +
+                ' · ' + nombreAnt + ' (' + rango(comp.anterior) + '): ' + cifraTexto(k, ant) + '.';
+            // Sin periodo elegido la cifra de la tarjeta no es la de la ventana: se aclara en cada una
+            var vs = comp.automatico ? '<span class="kpi__vs">últ. ' + comp.dias + ' días</span>' : '';
+            if (act == null || ant == null) {
+                var sin = act == null && ant == null ? 'Sin datos para comparar'
+                    : ant == null ? 'Sin dato previo'
+                    : comp.automatico ? 'Sin datos en ' + comp.dias + ' días' : 'Sin datos en el periodo';
+                return '<span class="kpi-var kpi-var--nd" data-tip="' + esc(tip) + '">' + sin + '</span>';
+            }
+            var dif = act - ant;
+            if (Math.abs(dif) < 1e-9) {
+                return '<span class="kpi-var kpi-var--igual" data-tip="' + esc(tip + ' Sin cambio.') + '">' + ic('minus') + 'Sin cambio</span>' + vs;
+            }
+            var sube = dif > 0;
+            var signo = sube ? '+' : '−';
+            var tono = def.sentido === 'neutra' ? 'neutro' : (sube === (def.sentido === 'bien') ? 'bueno' : 'malo');
+            var principal, extra = '';
+            if (def.tipo === 'pct') {
+                principal = signo + SMS.numero(Math.abs(dif), 1) + ' pts';
+                tip += ' Diferencia: ' + principal + ' (puntos porcentuales).';
+            } else {
+                var abs = def.tipo === 'dur' ? SMS.duracionDias(Math.abs(dif)) : SMS.numero(Math.abs(dif));
+                if (ant === 0) {
+                    principal = signo + abs;
+                    tip += ' Diferencia: ' + principal + '. El periodo anterior fue 0: no hay base para un porcentaje.';
+                } else {
+                    principal = signo + porcentajeTexto(Math.abs(dif / ant) * 100) + ' %';
+                    extra = '<small>' + signo + abs + '</small>';
+                    tip += ' Diferencia: ' + signo + abs + ' (' + principal + ').';
+                }
+            }
+            if (tono !== 'neutro') tip += tono === 'bueno' ? ' Tendencia favorable.' : ' Tendencia desfavorable.';
+            return '<span class="kpi-var kpi-var--' + tono + '" data-tip="' + esc(tip) + '">' + ic(sube ? 'arrow-up' : 'arrow-down') +
+                '<span class="sr-only">' + (sube ? 'Aumentó ' : 'Disminuyó ') + '</span>' + principal + extra + '</span>' + vs;
+        }
+        function pintarVariaciones(comp, cambios) {
+            Object.keys(KPIS).forEach(function (k) {
+                var cont = $('kpi-' + k + '-v');
+                var html;
+                if (!comp) html = '<span class="kpi-var kpi-var--nd">Sin comparación disponible</span>';
+                else if ($('kpi-' + k).dataset.v === '') html = '';  // la tarjeta ya dice "Sin datos"
+                else html = variacionHTML(k, comp);
+                if (cont.dataset.h !== html) { cont.innerHTML = html; cont.dataset.h = html; cambios[k] = true; }
+            });
+            var periodo = !comp ? '' : comp.automatico
+                ? 'Variación: últimos ' + comp.dias + ' días vs ' + comp.dias + ' previos'
+                : 'Variación vs ' + rango(comp.anterior);
+            document.querySelectorAll('.kpi-periodo').forEach(function (s) {
+                s.textContent = periodo;
+                if (comp) s.setAttribute('data-tip', (comp.automatico ? 'Últimos ' + comp.dias + ' días' : 'Periodo') + ': ' + rango(comp.actual) +
+                    ' · ' + (comp.automatico ? comp.dias + ' días previos' : 'periodo anterior de igual duración') + ': ' + rango(comp.anterior));
+                else s.removeAttribute('data-tip');
+            });
+            $('notaKpi').textContent = 'Las cifras corresponden a los filtros activos. ' +
+                (comp && comp.automatico ? 'Sin periodo elegido, la variación compara los últimos ' + comp.dias + ' días con los ' + comp.dias + ' previos; elige un periodo en «Más filtros» para comparar otro. ' : '') +
+                'Toca una tarjeta para filtrar.';
+            // Animación discreta solo en las tarjetas que cambiaron
+            Object.keys(cambios).forEach(function (k) {
+                var t = $('kpi-' + k).closest('.kpi');
+                t.classList.remove('is-cambio');
+                void t.offsetWidth;
+                t.classList.add('is-cambio');
+            });
+        }
+        // Sin datos (error de carga): nada de cifras viejas ni esqueletos activos
+        function kpisSinDatos() {
+            Object.keys(KPIS).forEach(function (k) {
+                var el = $('kpi-' + k);
+                if (el._raf) { cancelAnimationFrame(el._raf); el._raf = null; }
+                el.textContent = '—'; el.classList.remove('nd'); delete el.dataset.v;
+                $('kpi-' + k + '-v').innerHTML = ''; delete $('kpi-' + k + '-v').dataset.h;
+                var d = $('kpi-' + k + '-d'); if (d.querySelector('.skel')) d.innerHTML = '&nbsp;';
+            });
+            $('cuadre').innerHTML = '';
+        }
+
+        function pintarIndicadores(i, comp) {
+            var n = SMS.numero;
+            var cambios = {};
+            var marca = function (k, valor, detalle) { if (kpi(k, valor, detalle)) cambios[k] = true; };
+            marca('total', i.total, i.total ? i.abiertos + ' abiertos · ' + i.cerrados + ' cerrados' : 'Sin reportes con estos filtros');
+            marca('nuevos', i.nuevos);
+            marca('atencion', i.en_atencion);
+            marca('resueltos', i.resueltos);
+            marca('sinaccion', i.duplicados + i.no_requiere, i.duplicados + ' duplicado' + (i.duplicados === 1 ? '' : 's') + ' · ' + i.no_requiere + ' no requiere' + (i.no_requiere === 1 ? '' : 'n'));
+            marca('cerrados', i.porcentaje_cerrados, i.total ? i.cerrados + ' de ' + i.total + ' reportes' : 'Sin reportes con estos filtros');
+            marca('enplazo', i.porcentaje_en_plazo, i.cerrados_con_plazo
+                ? i.cerrados_en_plazo + ' de ' + i.cerrados_con_plazo + ' cerrados con plazo'
+                : (i.cerrados ? 'Ningún cerrado tenía plazo' : 'Sin reportes cerrados'));
+            if (i.dias_mediana_resolucion == null) marca('tiempo', null, 'Sin reportes resueltos');
+            else marca('tiempo', i.dias_mediana_resolucion,
+                'Mediana · promedio ' + SMS.duracionDias(i.dias_promedio_resolucion) + ' · ' + i.resueltos_con_fecha + ' resuelto' + (i.resueltos_con_fecha === 1 ? '' : 's'));
+            if (!i.evaluados) marca('alto', null, 'Ningún reporte evaluado aún');
+            else marca('alto', i.alto_riesgo, 'De ' + i.evaluados + ' evaluado(s)');
+            marca('pendeval', i.pendientes_evaluar, i.abiertos ? 'De ' + i.abiertos + ' abiertos' + (catalogos.matriz_validada === false ? ' · matriz sin validar' : '') : 'Sin reportes abiertos');
+            if (!i.con_fecha) {
+                marca('vencidos', null, i.abiertos ? 'Ningún abierto tiene plazo' : 'Sin reportes abiertos');
+                marca('proximos', null, i.abiertos ? 'Ningún abierto tiene plazo' : 'Sin reportes abiertos');
+            } else {
+                marca('vencidos', i.vencidos, 'De ' + i.con_fecha + ' con plazo');
+                marca('proximos', i.proximos, 'En los próximos ' + i.dias_aviso + ' días');
+            }
+            $('kpi-vencidos').parentNode.classList.toggle('is-alerta', i.vencidos > 0);
+            pintarVariaciones(comp, cambios);
+            kpisListos = true;
+            // Cuadre explícito de las cifras de estatus
+            var c = i.coherencia || {};
+            var ok = c.total_igual_abiertos_mas_cerrados && c.abiertos_igual_nuevos_mas_atencion && c.cerrados_igual_suma_de_cierres;
+            $('cuadre').innerHTML = i.total
+                ? '<span>Cuadre:</span> <b>' + n(i.total) + '</b> = ' + pl(i.nuevos, 'nuevo', 'nuevos') + ' + ' + n(i.en_atencion) + ' en atención + ' + pl(i.resueltos, 'resuelto', 'resueltos') + ' + ' +
+                  pl(i.duplicados, 'duplicado', 'duplicados') + ' + ' + pl(i.no_requiere, 'no requiere atención', 'no requieren atención') + ' ' +
+                  (ok ? '<span class="ok">' + ic('check') + 'Las cifras cuadran</span>' : '<span class="mal">' + ic('warn') + 'Las cifras no cuadran; revisa la calidad de datos</span>')
+                : '';
+        }
+
+        // ----------------------------------------------------------- carga
+        async function cargar() {
+            escribirURL();
+            pintarFormulario();
+            if (controlador) controlador.abort();
+            controlador = new AbortController();
+            var senal = controlador.signal;
+            var primera = !ultimosDatos;
+            if (primera) { pintarEncabezados(); esqueleto(); }
+            $('zonaResultados').classList.toggle('is-cargando', !primera);
+            $('zonaResultados').setAttribute('aria-busy', 'true');
+            $('barraCarga').hidden = false;
+            // Primera carga: esqueletos · después: cifras atenuadas hasta tener las nuevas
+            document.querySelectorAll('.sg-kpis').forEach(function (k) { k.classList.add(kpisListos ? 'is-actualizando' : 'is-cargando'); });
+            var q = qsCompleto();
+            q.set('por_pagina', estado.por_pagina);
+            var claveConteo = qsFiltros();
+            claveConteo.delete('tipo');
+            claveConteo = claveConteo.toString();
+            if (conteoPrevio && conteoPrevio.clave === claveConteo) q.set('conteo', '0');
+            // Una sola petición trae las tarjetas y su periodo de comparación
+            var qi = qsFiltros();
+            qi.set('comparar', '1');
+            try {
+                var res = await Promise.all([
+                    SMS.api('/api/sms/reportes?' + q.toString(), { signal: senal }),
+                    SMS.api('/api/sms/indicadores?' + qi.toString(), { signal: senal })
+                ]);
+                var d = res[0];
+                if (d.reportes.length === 0 && d.paginacion.total > 0 && estado.pagina > 1) {
+                    estado.pagina = d.paginacion.paginas; return cargar();
+                }
+                ultimosDatos = d;
+                catalogos.dias_aviso = d.dias_aviso;
+                ajustarColumnas();
+                pintarPaginas(d.paginacion);
+                pintarActivos(d.filtros_activos);
+                if (Array.isArray(d.conteo_tipos)) conteoPrevio = { clave: claveConteo, lista: d.conteo_tipos };
+                pintarTipos(d.conteo_tipos !== undefined ? d.conteo_tipos : conteoPrevio && conteoPrevio.lista);
+                pintarIndicadores(res[1].indicadores, res[1].comparacion);
+                var p = d.paginacion;
+                var ini = p.total ? (p.pagina - 1) * p.por_pagina + 1 : 0;
+                var fin = Math.min(p.total, p.pagina * p.por_pagina);
+                $('contador').innerHTML = p.total
+                    ? 'Mostrando <b>' + ini + '–' + fin + '</b> de <b>' + SMS.numero(p.total) + '</b> reporte' + (p.total === 1 ? '' : 's')
+                    : 'Sin resultados';
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                $('cuerpoTabla').innerHTML = '<tr><td colspan="12"><div class="sg-empty crit">' + ic('crit') + '<b>No se pudieron cargar los reportes</b>' + esc(e.message) +
+                    '<div style="margin-top:12px"><button type="button" class="btn btn-secondary btn-sm" id="btnReintentar">' + ic('refresh') + 'Reintentar</button></div></div></td></tr>';
+                $('tarjetas').innerHTML = '<div class="sg-card"><div class="sg-empty crit">' + ic('crit') + '<b>No se pudieron cargar los reportes</b>' + esc(e.message) + '</div></div>';
+                $('contador').textContent = 'Error al cargar';
+                kpisSinDatos();
+                var r = $('btnReintentar'); if (r) r.addEventListener('click', cargar);
+            } finally {
+                if (!senal.aborted) {
+                    $('zonaResultados').classList.remove('is-cargando');
+                    $('zonaResultados').setAttribute('aria-busy', 'false');
+                    $('barraCarga').hidden = true;
+                    document.querySelectorAll('.sg-kpis').forEach(function (k) { k.classList.remove('is-cargando', 'is-actualizando'); });
+                }
+            }
+        }
+
+        // ------------------------------------------------------ vista rápida
+        var qv = $('qv'), qvFondo = $('qvFondo');
+        function cerrarQV() {
+            qv.classList.remove('is-open'); qvFondo.classList.remove('is-open');
+            setTimeout(function () { qv.hidden = true; qvFondo.hidden = true; }, 220);
+            document.body.style.overflow = '';
+            if (ultimoDisparador) ultimoDisparador.focus();
+        }
+        async function abrirQV(folio, disparador) {
+            ultimoDisparador = disparador;
+            qv.hidden = false; qvFondo.hidden = false;
+            requestAnimationFrame(function () { qv.classList.add('is-open'); qvFondo.classList.add('is-open'); });
+            document.body.style.overflow = 'hidden';
+            $('qvTitulo').innerHTML = 'Reporte <span class="mono">' + esc(folio) + '</span>';
+            $('qvEstado').innerHTML = '';
+            $('qvCuerpo').innerHTML = '<div class="qv-seccion"><span class="skel skel--corta"></span><span class="skel"></span><span class="skel skel--media"></span></div><div class="qv-seccion"><span class="skel"></span><span class="skel skel--media"></span></div>';
+            $('qvDetalle').href = '/reportes/' + encodeURIComponent(folio);
+            $('qvHistorial').href = '/reportes/' + encodeURIComponent(folio) + '/historial';
+            $('qvCerrar').focus();
+            try {
+                var d = await SMS.api('/api/sms/reportes/' + encodeURIComponent(folio) + '/resumen');
+                var r = d.reporte;
+                $('qvEstado').innerHTML = SMS.estado(r.estado, true);
+                var html = '<div class="qv-seccion"><span class="sg-eyebrow">Etapas de atención</span>' + SMS.etapas(d.etapas, { compacto: true }) + '</div>';
+                html += '<div class="qv-seccion"><dl class="qv-meta">' +
+                    '<div><dt>Fecha del reporte</dt><dd>' + SMS.fechaHora(r.fecha) + '</dd></div>' +
+                    '<div><dt>Última actualización</dt><dd>' + SMS.fechaHora(r.fecha_actualizacion) + '</dd></div>' +
+                    '<div><dt>Tipo de reporte</dt><dd>' + (r.tipo_reporte_nombre ? esc(r.tipo_reporte_nombre) : '<span class="nd">Sin clasificar</span>') + '</dd></div>' +
+                    '<div><dt>Categoría</dt><dd>' + esc(r.tipo_problema) + '</dd></div>' +
+                    ((r.vuelo || r.matricula || r.posicion) ? '<div><dt>Vuelo · matrícula · posición</dt><dd class="mono">' + [r.vuelo, r.matricula, r.posicion].map(function (v) { return esc(v || '—'); }).join(' · ') + '</dd></div>' : '') +
+                    '<div><dt>Ubicación</dt><dd>' + esc(r.lugar) + (r.zona ? '<span class="sg-help" style="display:block">Zona: ' + esc(r.zona.nombre) + '</span>' : '') + '</dd></div>' +
+                    '<div><dt>Nivel de riesgo</dt><dd>' + riesgoHTML(r) + '</dd></div>' +
+                    '<div><dt>Plazo</dt><dd>' + SMS.semaforo(r, catalogos.dias_aviso, { estado: d.semaforo }) + '</dd></div>' +
+                    (r.compromiso ? '<div style="grid-column:1/-1"><dt>Compromiso de atención</dt><dd>' + SMS.fecha(r.compromiso.fecha) + (r.compromiso.area ? ' · ' + esc(r.compromiso.area) : '') + (r.compromiso.responsable ? ' · ' + esc(r.compromiso.responsable) : '') + '</dd></div>' : '') +
+                    '</dl></div>' +
+                    '<div class="qv-seccion"><span class="sg-eyebrow">Descripción</span><p class="texto-largo" style="white-space:pre-line;font-size:14px;color:var(--n800)">' + esc(r.descripcion) + '</p></div>';
+                html += '<div class="qv-seccion"><span class="sg-eyebrow">Áreas y su estatus</span>';
+                html += d.areas.length ? '<ul class="qv-areas">' + d.areas.map(function (a) {
+                    return '<li><span>' + esc(a.nombre) + '<small>' + (a.es_responsable ? 'Responsable' : 'Notificada') + (a.ultima ? ' · ' + SMS.relativa(a.ultima) : '') + '</small></span>' + (a.estado ? SMS.estado(a.estado) : '<span class="nd">Sin seguimiento</span>') + '</li>';
+                }).join('') + '</ul>' : '<p class="nd">Sin áreas asignadas.</p>';
+                html += '</div>';
+                html += '<div class="qv-seccion"><span class="sg-eyebrow">Últimos movimientos (' + d.movimientos + ' en total)</span>';
+                html += d.seguimientos.length ? '<ul class="qv-movs">' + d.seguimientos.map(function (s) {
+                    return '<li style="--dot:' + (SMS.DOT_ESTADO[s.estado] || 'var(--n300)') + '"><b>' + esc(s.departamento || 'Registro del reporte') + '</b> · ' + esc(SMS.ESTADOS[s.estado] || s.estado) +
+                        '<div class="meta">' + SMS.fechaHora(s.fecha) + ' · <span class="mono">' + esc(s.folio_seguimiento) + '</span></div>' +
+                        (s.descripcion ? '<div>' + esc(s.descripcion) + '</div>' : '') + '</li>';
+                }).join('') + '</ul>' : '<p class="nd">Sin movimientos.</p>';
+                html += '</div>';
+                var a = r.acciones;
+                html += '<div class="qv-seccion"><span class="sg-eyebrow">Acciones correctivas</span><p style="font-size:13.5px;color:var(--n700)">' +
+                    (a.total ? a.total + ' en total · ' + a.abiertas + ' abiertas · ' + a.por_verificar + ' por verificar' + (a.vencidas ? ' · <strong style="color:var(--r600)">' + a.vencidas + ' vencida(s)</strong>' : '') : 'Sin acciones registradas') +
+                    (d.evidencias ? ' · ' + d.evidencias + ' evidencia(s) del reporte' : '') + '</p></div>';
+                $('qvCuerpo').innerHTML = html;
+            } catch (e) {
+                $('qvCuerpo').innerHTML = '<div class="sg-empty crit">' + ic('crit') + '<b>No se pudo cargar el reporte</b>' + esc(e.message) + '</div>';
+            }
+        }
+        $('qvCerrar').addEventListener('click', cerrarQV);
+        qvFondo.addEventListener('click', cerrarQV);
+        qv.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); cerrarQV(); return; }
+            if (e.key === 'Tab') {
+                var foco = qv.querySelectorAll('button, a[href]');
+                var primero = foco[0], ultimo = foco[foco.length - 1];
+                if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+                else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+            }
+        });
+
+        // ---------------------------------------------------------- eventos
+        document.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-qv]');
+            if (b) { abrirQV(b.dataset.qv, b); return; }
+            var del = e.target.closest('[data-eliminar]');
+            if (del) {
+                SMS.confirmarEliminacion(del.dataset.eliminar).then(function (ok) { if (ok) { conteoPrevio = null; cargar(); } });
+                return;
+            }
+            var p = e.target.closest('[data-pag]');
+            if (p && !p.disabled) { estado.pagina = +p.dataset.pag; cargar(); $('contador').scrollIntoView({ block: 'nearest' }); return; }
+            var vm = e.target.closest('.ver-mas');
+            if (vm) {
+                var abierto = vm.getAttribute('aria-expanded') !== 'true';
+                vm.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+                vm.firstChild.textContent = abierto ? 'Ver menos' : 'Ver más';
+                vm.parentNode.querySelectorAll('[data-clamp]').forEach(function (el) { el.classList.toggle('is-abierta', abierto); });
+                return;
+            }
+            if (e.target.closest('[data-restablecer]')) restablecer();
+        });
+
+        $('formFiltros').addEventListener('submit', function (e) {
+            e.preventDefault();
+            leerFormulario(); estado.pagina = 1; cargar();
+        });
+        $('formFiltros').addEventListener('change', function (e) {
+            if (e.target.id === 'f_folio' || e.target.id === 'f_q') return;
+            if (e.target.id === 'f_fecha' && e.target.value) { $('f_desde').value = ''; $('f_hasta').value = ''; }
+            if ((e.target.id === 'f_desde' || e.target.id === 'f_hasta') && e.target.value) $('f_fecha').value = '';
+            leerFormulario(); estado.pagina = 1; cargar();
+        });
+        var temporizador;
+        ['f_folio', 'f_q'].forEach(function (id) {
+            $(id).addEventListener('input', function () {
+                clearTimeout(temporizador);
+                temporizador = setTimeout(function () { leerFormulario(); estado.pagina = 1; cargar(); }, 450);
+            });
+        });
+        document.querySelectorAll('.preset').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (b.getAttribute('aria-pressed') === 'true') { delete estado.filtros.desde; delete estado.filtros.hasta; }
+                else { var r = rangoPreset(b.dataset.preset); estado.filtros.desde = r.desde; estado.filtros.hasta = r.hasta; delete estado.filtros.fecha; }
+                estado.pagina = 1; cargar();
+            });
+        });
+        // Atajos por tipo de reporte: cuántos hay de cada uno; tocar uno filtra (tocarlo otra vez quita el filtro)
+        function pintarTipos(lista) {
+            var barra = $('tiposBarra');
+            if (!Array.isArray(lista)) { barra.hidden = true; return; }
+            barra.hidden = false;
+            var activo = estado.filtros.tipo || '';
+            $('tiposLista').innerHTML = lista.map(function (t) {
+                return '<button type="button" class="tipo-at' + (t.n ? '' : ' cero') + '" data-atajo="tipo" data-valor="' + esc(t.clave) + '" aria-pressed="' + (activo === t.clave) + '"' +
+                    (t.clave === 'sin_clasificar' ? ' data-tip="Reportes registrados antes de que el formulario pidiera el tipo de reporte"' : '') + '>' +
+                    '<span class="punto' + (t.grupo ? ' punto--' + esc(t.grupo) : '') + '" aria-hidden="true"></span>' + esc(t.nombre) + ' <b>' + SMS.numero(t.n) + '</b></button>';
+            }).join('');
+            var suma = function (g) { return lista.filter(function (t) { return t.grupo === g; }).reduce(function (s, t) { return s + t.n; }, 0); };
+            var vol = suma('voluntario'), obl = suma('obligatorio');
+            $('tiposNota').textContent = (vol || obl ? 'Reportes voluntarios: ' + SMS.numero(vol) + ' · obligatorios: ' + SMS.numero(obl) + '. ' : '') +
+                (activo ? 'Toca el tipo elegido otra vez para quitar el filtro.' : 'Toca un tipo para filtrar la tabla.');
+        }
+
+        // Atajos (tarjetas y tipos de reporte): tocar uno filtra; tocarlo otra vez quita el filtro
+        document.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-atajo]');
+            if (!b) return;
+            var k = b.dataset.atajo;
+            if (estado.filtros[k] === b.dataset.valor) delete estado.filtros[k];
+            else estado.filtros[k] = b.dataset.valor;
+            estado.pagina = 1; cargar();
+        });
+        function restablecer() {
+            estado.filtros = {}; estado.pagina = 1;
+            cargar();
+            SAGA.toast('Filtros restablecidos', 'info', { duracion: 2500 });
+        }
+        $('btnRestablecer').addEventListener('click', restablecer);
+        $('btnMasFiltros').addEventListener('click', function () {
+            var abierto = this.getAttribute('aria-expanded') === 'true';
+            this.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+            $('filtrosMas').hidden = abierto;
+        });
+        $('ordenCampo').addEventListener('change', function () {
+            estado.orden.campo = this.value;
+            estado.orden.dir = this.value === 'folio' || this.value === 'vencimiento' ? 'asc' : 'desc';
+            estado.pagina = 1; cargar();
+        });
+        $('ordenDir').addEventListener('click', function () {
+            estado.orden.dir = estado.orden.dir === 'desc' ? 'asc' : 'desc';
+            estado.pagina = 1; cargar();
+        });
+        $('porPagina').addEventListener('change', function () { estado.por_pagina = +this.value; estado.pagina = 1; cargar(); });
+
+        // Exportación personalizable (public/js/sms-exportar.js): mismos filtros y orden de la vista
+        function abrirExportacion(formato) {
+            SMS.cerrarMenus();
+            SMSExportar.abrir({ formato: formato, filtros: estado.filtros, orden: estado.orden });
+        }
+        $('expExcel').addEventListener('click', function () { abrirExportacion('xlsx'); });
+        $('expPdf').addEventListener('click', function () { abrirExportacion('pdf'); });
+        $('expImprimir').addEventListener('click', function () {
+            SMS.cerrarMenus();
+            var q = qsFiltros(); q.set('imprimir', '1');
+            window.open('/reportes/ejecutivo?' + q.toString(), '_blank', 'noopener');
+        });
+
+        // ----------------------------------------------------------- inicio
+        leerURL();
+        if (AVANZADOS.some(function (c) { return estado.filtros[c]; })) {
+            $('btnMasFiltros').setAttribute('aria-expanded', 'true');
+            $('filtrosMas').hidden = false;
+        }
+        pintarMenuColumnas();
+        pintarEncabezados();
+        esqueleto();
+        Promise.all([cargarCatalogos(), SMS.sesion()]).then(function (r) {
+            puedeEliminar = !!(r[1] && r[1].capacidades.indexOf('eliminar_reporte') >= 0);
+            cargar();
+        });
+    })();
+    </script>
+</body>
+</html>

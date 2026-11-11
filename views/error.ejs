@@ -1,0 +1,71 @@
+<%
+    const _codigo = typeof codigo !== 'undefined' ? codigo : 500;
+    const _mensaje = typeof mensaje !== 'undefined' ? mensaje : 'Ocurrió un error inesperado.';
+    const _titulos = {
+        403: 'Acceso restringido',
+        404: 'No encontramos lo que buscas',
+        500: 'Algo salió mal'
+    };
+    const _iconos = { 403: 'lock', 404: 'search', 500: 'crit' };
+-%>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= _titulos[_codigo] || 'Error' %> · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .error-pagina { flex: 1 0 auto; display: flex; align-items: center; padding: 48px 0 64px; }
+        .error-tarjeta { max-width: 520px; margin: 0 auto; padding: 36px 32px 32px; text-align: center; }
+        .error-icono {
+            width: 56px; height: 56px; margin: 0 auto 16px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--n50); color: var(--n600); border-radius: 50%;
+        }
+        .error-icono.crit { background: var(--r100); color: var(--r600); }
+        .error-icono .ic { width: 28px; height: 28px; }
+        .error-codigo { font: 500 12.5px var(--fm); color: var(--n500); letter-spacing: .04em; }
+        .error-tarjeta h1 { font-size: 24px; line-height: 30px; margin: 6px 0 8px; }
+        .error-tarjeta p { color: var(--n600); }
+        .error-acciones { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [{ href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' }]
+}) %>
+
+    <main class="error-pagina">
+        <div class="sg-wrap">
+            <section class="sg-card sg-card--feat error-tarjeta">
+                <div class="error-icono<%= _codigo >= 500 ? ' crit' : '' %>">
+                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-<%= _iconos[_codigo] || 'warn' %>"/></svg>
+                </div>
+                <div class="error-codigo">Error <%= _codigo %></div>
+                <h1><%= _titulos[_codigo] || 'Error' %></h1>
+                <p><%= _mensaje %>.</p>
+                <div class="error-acciones">
+                    <button type="button" class="btn btn-secondary" id="btnRegresar">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-back"/></svg>
+                        Regresar
+                    </button>
+                    <a class="btn btn-primary" href="/reportes/general">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg>
+                        Ir a la vista general
+                    </a>
+                </div>
+            </section>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+        document.getElementById('btnRegresar').addEventListener('click', function() {
+            if (history.length > 1) history.back();
+            else window.location.href = '/reportes/general';
+        });
+    </script>
+</body>
+</html>

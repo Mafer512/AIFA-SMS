@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        body { background: var(--sf); }
+
+        .acceso {
+            flex: 1 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            min-height: 100vh;
+        }
+        @media (min-width: 960px) {
+            .acceso { grid-template-columns: minmax(420px, 44%) 1fr; }
+        }
+
+        /* Panel institucional (grafito, logotipo negativo) */
+        .marca {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 40px;
+            padding: 28px 20px 32px;
+            /* Panel siempre grafito: fija sus propios tonos en ambos temas */
+            --n900: #141A1F; --n200: #D4D9DC; --n300: #B1BAC1;
+            background: var(--n900);
+            color: var(--n200);
+            overflow: hidden;
+        }
+        .marca::after {
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+            height: 4px; background: var(--estela-o);
+        }
+        @media (min-width: 960px) {
+            .marca { padding: 48px 56px 52px; }
+            .marca::after { left: auto; top: 0; width: 4px; height: auto; background: linear-gradient(180deg, #078C72 0%, #2FB295 24%, #FFFFFF 46%, #FFFFFF 54%, #E05269 76%, #CF324C 100%); }
+        }
+
+        .marca__logo { display: block; width: min(340px, 100%); height: auto; }
+
+        .marca__centro { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
+        .marca .sg-saga .w { font-size: clamp(34px, 5vw, 52px); color: #fff; }
+        .marca .sg-saga .u { background: var(--estela-o); }
+        .marca .sg-saga .dsc { font-size: clamp(9.5px, 1.2vw, 12px); color: var(--n300); }
+        .marca__lema {
+            max-width: 420px;
+            font-family: var(--ft);
+            font-size: 17px;
+            font-weight: 400;
+            line-height: 1.45;
+            color: var(--n200);
+        }
+        .marca__lema b { color: #fff; font-weight: 700; }
+
+        .marca__gsd { display: flex; align-items: center; gap: 14px; font-size: 12.5px; line-height: 1.4; color: var(--n300); }
+        .marca__gsd img { height: 52px; width: auto; }
+        .marca__gsd b { display: block; color: #fff; font-weight: 600; }
+
+        @media (max-width: 959px) {
+            .marca { gap: 22px; }
+            .marca__logo { width: 230px; }
+            .marca__lema, .marca__gsd { display: none; }
+        }
+
+        /* Formulario */
+        .panel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 40px 20px 48px;
+            background: var(--sf);
+        }
+        .panel > .sg-theme { position: absolute; top: 16px; right: 16px; }
+        @media screen { :root[data-theme="dark"] .marca { background: #0C1114; } }
+        .tarjeta { width: 100%; max-width: 400px; }
+        .tarjeta h1 { font-size: 30px; line-height: 36px; margin: 10px 0 6px; }
+        .tarjeta .intro { color: var(--n600); margin-bottom: 28px; }
+
+        form { display: flex; flex-direction: column; gap: 18px; }
+
+        .campo-ic { position: relative; }
+        .campo-ic > .ic {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            width: 18px; height: 18px; color: var(--n400); pointer-events: none;
+        }
+        .campo-ic input { height: 44px; padding-left: 40px; }
+        .campo-ic input:focus ~ .ic, .campo-ic input:focus + .ic { color: var(--v700); }
+        .campo-ic.con-boton input { padding-right: 48px; }
+
+        .btn-ver {
+            position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+            width: 36px; height: 36px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: none; border: 0; border-radius: 6px;
+            color: var(--n500);
+        }
+        .btn-ver:hover { background: var(--n50); color: var(--n800); }
+        .btn-ver:focus-visible { outline: none; box-shadow: var(--focus); }
+        .btn-ver .ic { width: 18px; height: 18px; }
+
+        .mensaje { display: none; }
+        .mensaje.show { display: flex; }
+
+        .btn-entrar { margin-top: 6px; }
+        .btn-entrar .sg-spinner { border-color: rgba(255,255,255,.35); border-top-color: #fff; }
+
+        .enlaces {
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid var(--n100);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .enlaces .btn { flex: 1 1 160px; }
+
+        .nota { margin-top: 18px; font-size: 12px; color: var(--n500); }
+        .mensaje-ok { display: none; margin-bottom: 4px; }
+        .mensaje-ok.show { display: flex; }
+        .pista { display: block; margin-top: 4px; font-size: 12px; color: var(--n500); }
+        .config-inicial { margin-top: 22px; padding: 14px; border: 1px dashed var(--n300); border-radius: 10px; background: var(--n50); }
+        .config-inicial[hidden] { display: none; }
+        .config-inicial__t { display: flex; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--n700); }
+        .config-inicial__t .ic { width: 20px; height: 20px; color: var(--v700); flex: none; margin-top: 1px; }
+        .config-inicial__t b { display: block; color: var(--n900); font-size: 13.5px; }
+        .tarjeta[hidden] { display: none; }
+        #setupForm .sg-field + .sg-field, #setupForm .dos-col + .sg-field, #setupForm .sg-field + .dos-col { margin-top: 14px; }
+        .dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+        #setupForm .dos-col .sg-field { margin-top: 0; }
+        @media (max-width: 420px) { .dos-col { grid-template-columns: 1fr; } }
+        #setupForm .btn-lg { margin-top: 20px; }
+        .reqs { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--n500); }
+        .reqs li::before { content: "○ "; }
+        .reqs li.ok { color: var(--v700); }
+        .reqs li.ok::before { content: "✓ "; }
+    </style>
+</head>
+<body>
+    <main class="acceso">
+        <section class="marca" aria-label="Identidad institucional">
+            <img class="marca__logo" src="/img/aifa-horizontal-negativo.svg" alt="Aeropuerto Internacional Felipe Ángeles" width="340" height="45">
+
+            <div class="marca__centro">
+                <div class="sg-saga">
+                    <span class="w">S.A.G.A.</span>
+                    <span class="u"></span>
+                    <span class="dsc">Sistema de Administración<br>y Gestión Aeroportuaria</span>
+                </div>
+                <p class="marca__lema"><b>Trayectoria.</b> De la pista al dato, del dato a la decisión.</p>
+            </div>
+
+            <div class="marca__gsd">
+                <img src="/img/gsd-emblema-132.png" alt="Emblema del Grupo de Soporte Digital" width="52" height="52">
+                <span>Desarrollado por<b>Grupo de Soporte Digital</b></span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <button type="button" class="sg-theme" aria-label="Modo oscuro" aria-pressed="false" title="Cambiar a modo oscuro">
+                <svg class="ic ic-luna" aria-hidden="true"><use href="/img/icons.svg#i-moon"/></svg>
+                <svg class="ic ic-sol" aria-hidden="true"><use href="/img/icons.svg#i-sun"/></svg>
+            </button>
+            <div class="tarjeta" id="vistaLogin">
+                <span class="sg-kicker">Seguimiento de hallazgos · SMS</span>
+                <h1>Iniciar sesión</h1>
+                <p class="intro">Acceso para áreas responsables y administradores.</p>
+
+                <form id="loginForm" novalidate>
+                    <div id="mensajeOk" class="sg-banner mensaje-ok" role="status">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-ok"/></svg>
+                        <span></span>
+                    </div>
+                    <div id="mensaje" class="sg-banner crit mensaje" role="alert">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-crit"/></svg>
+                        <span id="mensajeTexto"></span>
+                    </div>
+
+                    <div class="sg-field">
+                        <label for="username">Usuario o correo</label>
+                        <div class="campo-ic">
+                            <input type="text" id="username" name="username" autocomplete="username" required autofocus spellcheck="false" autocapitalize="none">
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user"/></svg>
+                        </div>
+                        <span class="pista">Tu usuario no lleva espacios (por ejemplo, nombre.apellido) o usa tu correo.</span>
+                    </div>
+
+                    <div class="sg-field">
+                        <label for="password">Contraseña</label>
+                        <div class="campo-ic con-boton">
+                            <input type="password" id="password" name="password" autocomplete="current-password" required>
+                            <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-lock"/></svg>
+                            <button type="button" class="btn-ver" id="btnVer" aria-label="Mostrar contraseña" aria-pressed="false">
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-eye"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg btn-block btn-entrar" id="btnEntrar">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-login"/></svg>
+                        <span>Entrar</span>
+                    </button>
+                </form>
+
+                <div class="config-inicial" id="configInicial" hidden>
+                    <div class="config-inicial__t">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-key"/></svg>
+                        <div><b>¿No tienes cuenta de administrador?</b><span>Créala desde esta computadora con el código que muestra el servidor.</span></div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-block" id="btnConfig">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg>Crear cuenta de administrador
+                    </button>
+                </div>
+            </div>
+
+            <div class="tarjeta" id="vistaSetup" hidden>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnVolverLogin" style="margin-left:-10px">
+                    <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-back"/></svg>Volver a iniciar sesión
+                </button>
+                <span class="sg-kicker" style="display:block;margin-top:14px">Configuración inicial</span>
+                <h1>Crear cuenta de administrador</h1>
+                <p class="intro">Con esta cuenta podrás dar de alta a los demás usuarios desde <b>Administración → Usuarios y permisos</b>.</p>
+
+                <form id="setupForm" novalidate>
+                    <div class="sg-banner crit mensaje" id="setupMensaje" role="alert">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-crit"/></svg>
+                        <span id="setupMensajeTexto"></span>
+                    </div>
+                    <div class="sg-field">
+                        <label for="sCodigo">Código de configuración <span class="req">*</span></label>
+                        <input type="text" id="sCodigo" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" maxlength="11" style="font-family:var(--fm);letter-spacing:.08em;text-transform:uppercase">
+                        <span class="sg-help">Aparece en la terminal donde corre el servidor: <span class="mono">Código de configuración inicial</span>.</span>
+                    </div>
+                    <div class="dos-col">
+                        <div class="sg-field"><label for="sNombre">Nombre <span class="req">*</span></label><input type="text" id="sNombre" autocomplete="given-name" maxlength="150"></div>
+                        <div class="sg-field"><label for="sApellidos">Apellidos</label><input type="text" id="sApellidos" autocomplete="family-name" maxlength="200"></div>
+                    </div>
+                    <div class="sg-field">
+                        <label for="sUsuario">Usuario para entrar <span class="req">*</span></label>
+                        <input type="text" id="sUsuario" autocomplete="username" spellcheck="false" maxlength="60" placeholder="nombre.apellido">
+                        <span class="sg-help">Sin espacios. Se sugiere a partir de tu nombre.</span>
+                    </div>
+                    <div class="sg-field"><label for="sCorreo">Correo <span class="req">*</span></label><input type="email" id="sCorreo" autocomplete="email" maxlength="255"></div>
+                    <div class="sg-field"><label for="sArea">Área <span class="req">*</span></label><select id="sArea"></select></div>
+                    <div class="sg-field">
+                        <label for="sPass">Contraseña <span class="req">*</span></label>
+                        <input type="password" id="sPass" autocomplete="new-password" maxlength="128">
+                        <ul class="reqs" id="sReqs" aria-live="polite">
+                            <li data-r="largo">Al menos 10 caracteres</li>
+                            <li data-r="mezcla">Letras y números</li>
+                        </ul>
+                    </div>
+                    <div class="sg-field"><label for="sPass2">Confirmar contraseña <span class="req">*</span></label><input type="password" id="sPass2" autocomplete="new-password" maxlength="128"></div>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" id="btnCrear">
+                        <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-user-check"/></svg><span>Crear cuenta</span>
+                    </button>
+                    <p class="nota">La creación queda registrada en la bitácora de auditoría.</p>
+                </form>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const mensaje = document.getElementById('mensaje');
+        const mensajeTexto = document.getElementById('mensajeTexto');
+        const btnEntrar = document.getElementById('btnEntrar');
+        const inputPassword = document.getElementById('password');
+        const btnVer = document.getElementById('btnVer');
+
+        btnVer.addEventListener('click', () => {
+            const visible = inputPassword.type === 'text';
+            inputPassword.type = visible ? 'password' : 'text';
+            btnVer.setAttribute('aria-pressed', String(!visible));
+            btnVer.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+            btnVer.innerHTML = SAGA.icono(visible ? 'eye' : 'eye-off');
+            inputPassword.focus();
+        });
+
+        function mostrarError(texto) {
+            mensajeTexto.textContent = texto;
+            mensaje.classList.add('show');
+        }
+
+        function estadoBoton(cargando) {
+            btnEntrar.disabled = cargando;
+            btnEntrar.innerHTML = cargando
+                ? '<span class="sg-spinner sg-spinner--sm" aria-hidden="true"></span><span>Entrando…</span>'
+                : SAGA.icono('login') + '<span>Entrar</span>';
+        }
+
+        // Destino según el rol del usuario
+        function destinoPara(usuario) {
+            // Regresar a la página desde la que se pidió iniciar sesión (solo rutas internas)
+            var volver = new URLSearchParams(location.search).get('volver') || '';
+            if (/^\/(?!\/)[\w\-\/%.]*$/.test(volver) && volver.indexOf('/login') !== 0) {
+                return volver;
+            }
+            if (usuario.debe_cambiar_password) return '/mi-cuenta?cambiar=1';
+            if (usuario.rol === 'admin' || !usuario.departamento_codigo) {
+                return '/admin/reportes-rapidos';
+            }
+            return '/admin/panel/' + encodeURIComponent(usuario.departamento_codigo);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            mensaje.classList.remove('show');
+            document.getElementById('mensajeOk').classList.remove('show');
+
+            const username = document.getElementById('username').value.trim();
+            const password = inputPassword.value;
+
+            if (!username || !password) {
+                mostrarError('Escribe tu usuario y contraseña.');
+                return;
+            }
+
+            estadoBoton(true);
+
+            try {
+                const respuesta = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const resultado = await respuesta.json();
+
+                if (!resultado.success) {
+                    throw new Error(resultado.error || 'No se pudo iniciar sesión');
+                }
+
+                try {
+                    localStorage.setItem('rsm_token', resultado.token);
+                    localStorage.setItem('rsm_usuario', JSON.stringify(resultado.usuario));
+                } catch (err) {
+                    console.warn('No se pudo guardar la sesión en este navegador:', err);
+                }
+
+                window.location.href = destinoPara(resultado.usuario);
+            } catch (error) {
+                mostrarError(error.message || 'Error de conexión con el servidor');
+                estadoBoton(false);
+            }
+        });
+
+        // ------------------------------------------------ configuración inicial
+        (function () {
+            const $ = id => document.getElementById(id);
+            const vistaLogin = $('vistaLogin'), vistaSetup = $('vistaSetup');
+            let usuarioEditado = false;
+
+            function sugerir() {
+                if (usuarioEditado) return;
+                const partes = [$('sNombre').value, $('sApellidos').value].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '')
+                    .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+                $('sUsuario').value = partes.length > 1 ? partes[0] + '.' + partes[1] : (partes[0] || '');
+            }
+            function revisarReqs() {
+                const p = $('sPass').value;
+                const ok = { largo: p.length >= 10, mezcla: /[A-Za-z]/.test(p) && /\d/.test(p) };
+                document.querySelectorAll('#sReqs li').forEach(li => li.classList.toggle('ok', ok[li.dataset.r]));
+            }
+            function error(t) { $('setupMensajeTexto').textContent = t; $('setupMensaje').classList.add('show'); }
+            function mostrar(setup) {
+                vistaLogin.hidden = setup; vistaSetup.hidden = !setup;
+                (setup ? $('sCodigo') : document.getElementById('username')).focus();
+            }
+
+            $('sNombre').addEventListener('input', sugerir);
+            $('sApellidos').addEventListener('input', sugerir);
+            $('sUsuario').addEventListener('input', () => { usuarioEditado = $('sUsuario').value.trim() !== ''; });
+            $('sPass').addEventListener('input', revisarReqs);
+            $('btnConfig').addEventListener('click', () => mostrar(true));
+            $('btnVolverLogin').addEventListener('click', () => mostrar(false));
+
+            $('setupForm').addEventListener('submit', async e => {
+                e.preventDefault();
+                $('setupMensaje').classList.remove('show');
+                const cuerpo = {
+                    codigo: $('sCodigo').value.trim(), nombre: $('sNombre').value.trim(), apellidos: $('sApellidos').value.trim(),
+                    username: $('sUsuario').value.trim(), email: $('sCorreo').value.trim(), id_departamento: $('sArea').value,
+                    password: $('sPass').value, confirmacion: $('sPass2').value
+                };
+                if (!cuerpo.codigo) return error('Escribe el código de configuración que muestra el servidor.');
+                if (!cuerpo.nombre || !cuerpo.username || !cuerpo.email) return error('Completa nombre, usuario y correo.');
+                if (cuerpo.password !== cuerpo.confirmacion) return error('Las contraseñas no coinciden.');
+                const b = $('btnCrear');
+                b.disabled = true;
+                try {
+                    const r = await fetch('/api/auth/configuracion-inicial', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+                    const d = await r.json();
+                    if (!d.success) throw new Error(d.error || 'No se pudo crear la cuenta');
+                    mostrar(false);
+                    document.getElementById('username').value = d.username;
+                    document.getElementById('password').value = '';
+                    document.getElementById('password').focus();
+                    const ok = document.getElementById('mensajeOk');
+                    ok.querySelector('span').textContent = 'Cuenta creada. Inicia sesión con el usuario ' + d.username + ' y tu contraseña.';
+                    ok.classList.add('show');
+                } catch (er) {
+                    error(er.message);
+                } finally { b.disabled = false; }
+            });
+
+            fetch('/api/auth/configuracion-inicial').then(r => r.json()).then(d => {
+                if (!d.disponible) return;
+                const areas = d.departamentos || [];
+                const sms = areas.find(a => /sms|seguridad operacional/i.test(a.codigo + ' ' + a.nombre));
+                $('sArea').innerHTML = areas.map(a => '<option value="' + a.id + '"' + (sms && a.id === sms.id ? ' selected' : '') + '>' + SMS.esc(a.nombre) + '</option>').join('');
+                $('configInicial').hidden = false;
+            }).catch(() => {});
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe ejecutivo SMS · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <script src="/js/sms-graficas.js"></script>
+    <script src="/js/sms-analisis.js"></script>
+    <style>
+        @page { size: A4; margin: 12mm 12mm 14mm; }
+        body { background: var(--n50); }
+        .herramientas { position: sticky; top: 0; z-index: 10; background: var(--sf); border-bottom: 1px solid var(--n100); }
+        .herramientas .sg-wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; flex-wrap: wrap; }
+        .hoja { max-width: 1000px; margin: 24px auto 48px; padding: 36px 40px; background: var(--sf); border: 1px solid var(--n100); border-radius: 12px; box-shadow: var(--sh-md); }
+        .hoja-cab { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 16px; border-bottom: 3px solid transparent; border-image: var(--estela) 1; }
+        .hoja-cab .sg-lockup img { height: 34px; }
+        .hoja h1 { font-size: 24px; margin: 22px 0 4px; }
+        .hoja .meta { font-size: 12.5px; color: var(--n600); }
+        .hoja h2 { font-size: 15px; margin: 26px 0 10px; display: flex; align-items: center; gap: 8px; }
+        .hoja h2 .ic { color: var(--v700); width: 18px; height: 18px; }
+        .kpis-e { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .kpis-e div { padding: 10px 12px; border: 1px solid var(--n100); border-radius: 8px; }
+        .kpis-e span { display: block; font: 600 9.5px var(--ft); letter-spacing: .1em; text-transform: uppercase; color: var(--n600); }
+        .kpis-e b { display: block; margin-top: 4px; font-size: 22px; font-weight: 600; color: var(--n900); }
+        .kpis-e b.nd { font-size: 14px; font-weight: 500; color: var(--n400); }
+        .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .listado { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+        .listado th { text-align: left; padding: 6px 6px; font: 700 9.5px var(--ft); letter-spacing: .08em; text-transform: uppercase; color: var(--n600); background: var(--n50); border-bottom: 1.5px solid var(--n200); }
+        .listado td { padding: 6px; border-bottom: 1px solid var(--n100); vertical-align: top; }
+        .listado .estado-badge, .listado .riesgo-pill { height: 20px; font-size: 11px; }
+        .hoja .tabla-comp { font-size: 11.5px; }
+        .hoja .tabla-comp th, .hoja .tabla-comp td { padding: 6px 7px; }
+        .hoja .tabla-comp thead th { letter-spacing: .04em; font-size: 9.5px; }
+        .hoja .rec-item { padding: 7px 2px; }
+        .hoja .resumen-e { font-size: 13px; color: var(--n800); line-height: 1.55; }
+        .hoja .resumen-e li { margin-bottom: 4px; }
+        .hoja .cuadre-e { font-size: 11.5px; color: var(--n600); margin-top: 8px; }
+        .pie-doc { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--n100); display: flex; justify-content: space-between; gap: 16px; font-size: 11px; color: var(--n500); }
+        .pie-doc img { height: 30px; vertical-align: middle; margin-right: 8px; }
+        @media (max-width: 760px) { .hoja { padding: 20px 16px; margin: 12px; } .kpis-e { grid-template-columns: repeat(2, 1fr); } .dos { grid-template-columns: 1fr; } }
+        @media print {
+            body { background: #fff; }
+            .herramientas { display: none; }
+            .hoja { max-width: none; margin: 0; padding: 0; border: 0; box-shadow: none; }
+            .hoja h2 { break-after: avoid; }
+            .grafica-e, .kpis-e, .bloque-e { break-inside: avoid; }
+            .hoja .tabla-resp { overflow: visible; }
+            .hoja .tabla-comp { font-size: 9.5px; }
+            .hoja .tabla-comp th, .hoja .tabla-comp td { padding: 4px 4px; }
+            .hoja .tabla-comp thead th { font-size: 8px; letter-spacing: .02em; }
+            .hoja .tabla-comp thead .sub { display: none; }
+            .hoja .tabla-comp tbody th { max-width: 150px; }
+            .hoja .tabla-comp .sub, .hoja .tabla-comp small { font-size: 8.5px; }
+            .listado tr { break-inside: avoid; }
+            .viz-tip { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="herramientas">
+        <div class="sg-wrap">
+            <a class="btn btn-ghost" href="/reportes/general" id="btnVolver"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-back"/></svg>Volver a reportes</a>
+            <div style="display:flex;gap:8px">
+                <button type="button" class="sg-theme" aria-label="Modo oscuro" aria-pressed="false"><svg class="ic ic-luna" aria-hidden="true"><use href="/img/icons.svg#i-moon"/></svg><svg class="ic ic-sol" aria-hidden="true"><use href="/img/icons.svg#i-sun"/></svg></button>
+                <button type="button" class="btn btn-primary" id="btnImprimir" disabled><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg>Imprimir o guardar como PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <article class="hoja" id="hoja" aria-busy="true">
+        <header class="hoja-cab">
+            <span class="sg-lockup">
+                <img src="/img/aifa-horizontal-positivo.svg" alt="Aeropuerto Internacional Felipe Ángeles" width="257" height="34">
+                <span class="sep" aria-hidden="true"></span>
+                <span class="sg-saga" aria-hidden="true"><span class="w">S.A.G.A.</span><span class="u"></span></span>
+            </span>
+            <span class="meta" style="text-align:right">Seguridad operacional · SMS<br><span id="fechaGen"></span></span>
+        </header>
+
+        <h1>Informe ejecutivo de seguridad operacional (SMS)</h1>
+        <p class="meta" id="filtrosTxt">Cargando…</p>
+
+        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-doc"/></svg>Resumen</h2>
+        <ul class="resumen-e" id="resumen"></ul>
+
+        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-activity"/></svg>Indicadores</h2>
+        <div class="kpis-e" id="kpis"></div>
+        <p class="cuadre-e" id="cuadre"></p>
+
+        <div class="bloque-e">
+            <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trend"/></svg>Comparación entre periodos</h2>
+            <div id="comparativo"></div>
+        </div>
+
+        <div class="bloque-e">
+            <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-gauge"/></svg>Indicadores de desempeño de seguridad (SPI)</h2>
+            <div id="spi"></div>
+        </div>
+
+        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-chart-line"/></svg>Evolución mensual · reportes recibidos y cuántos ya se cerraron</h2>
+        <div class="grafica-e"><div class="viz" id="g-mensual"></div></div>
+
+        <div class="dos">
+            <div class="grafica-e">
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pie"/></svg>Distribución por estatus</h2>
+                <div class="viz" id="g-estatus"></div>
+            </div>
+            <div class="grafica-e">
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-tag"/></svg>Categorías más frecuentes</h2>
+                <div class="viz" id="g-categorias"></div>
+            </div>
+        </div>
+
+        <div class="dos">
+            <div class="grafica-e">
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-building"/></svg>Hallazgos por área</h2>
+                <div class="viz" id="g-areas"></div>
+            </div>
+            <div class="grafica-e">
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>Nivel de riesgo</h2>
+                <div class="viz" id="g-riesgo"></div>
+                <p class="meta" id="notaMatriz" style="margin-top:8px"></p>
+            </div>
+        </div>
+
+        <div class="bloque-e">
+            <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-building"/></svg>Desempeño por área responsable</h2>
+            <div id="desempeno"></div>
+        </div>
+
+        <div class="dos bloque-e">
+            <div>
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-repeat"/></svg>Categorías recurrentes</h2>
+                <div id="recCat"></div>
+            </div>
+            <div>
+                <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pin"/></svg><span id="recLugT">Lugares recurrentes</span></h2>
+                <div id="recLug"></div>
+            </div>
+        </div>
+        <p class="meta" id="recNota"></p>
+
+        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-list"/></svg>Listado de reportes <span class="meta" id="cuentaListado"></span></h2>
+        <table class="listado">
+            <thead><tr><th>Folio</th><th>Fecha</th><th>Categoría</th><th>Área</th><th>Estatus</th><th>Riesgo</th><th>Plazo</th></tr></thead>
+            <tbody id="listado"></tbody>
+        </table>
+
+        <footer class="pie-doc">
+            <span><img src="/img/gsd-emblema-132.png" alt="" width="30" height="30">Desarrollado por Grupo de Soporte Digital</span>
+            <span>S.A.G.A. · Aeropuerto Internacional Felipe Ángeles · Documento de uso interno</span>
+        </footer>
+    </article>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, G = SMSGraficas;
+        var params = new URLSearchParams(location.search);
+        var autoImprimir = params.get('imprimir') === '1';
+        params.delete('imprimir');
+        var qs = params.toString();
+        $('btnVolver').href = '/reportes/general' + (qs ? '?' + qs : '');
+        $('fechaGen').textContent = 'Generado el ' + SMS.fechaHora(new Date());
+        var COLOR_ESTADO = { A: 'var(--amb)', B: 'var(--az-t)', C: 'var(--az)', D: 'var(--s1)', E: 'var(--n400)', F: 'var(--n300)' };
+
+        // Todas las páginas del listado (antes se cortaba en 500); tope de seguridad de 50,000
+        async function todasLasFilas() {
+            var filas = [], pagina = 1, total = 0, filtrosActivos = [];
+            do {
+                var q = new URLSearchParams(qs); q.set('por_pagina', '100'); q.set('pagina', String(pagina));
+                var d = await SMS.api('/api/sms/reportes?' + q.toString());
+                filas = filas.concat(d.reportes); total = d.paginacion.total; filtrosActivos = d.filtros_activos;
+                pagina++;
+            } while (filas.length < total && d.reportes.length && pagina <= 500);
+            return { filas: filas, total: total, filtros: filtrosActivos };
+        }
+
+        async function iniciar() {
+            try {
+                var sufijo = qs ? '?' + qs : '';
+                var r = await Promise.all([
+                    SMS.api('/api/sms/analisis' + sufijo), todasLasFilas(),
+                    SMS.api('/api/sms/comparativo' + sufijo), SMS.api('/api/sms/spi' + sufijo),
+                    SMS.api('/api/sms/desempeno-areas' + sufijo), SMS.api('/api/sms/recurrencias' + sufijo)
+                ]);
+                var d = r[0], lista = r[1], i = d.indicadores, a = d.analisis, n = SMS.numero;
+                var comp = r[2], spiD = r[3], des = r[4], rec = r[5];
+                var A = SMSAnalisis;
+                var pl = function (x, uno, varios) { return n(x) + ' ' + (x === 1 ? uno : varios); };
+                A.comparativo($('comparativo'), comp);
+                A.spi($('spi'), spiD, { alto: 90 });
+                A.desempeno($('desempeno'), des, { compacto: true });
+                A.recurrencias($('recCat'), $('recLug'), rec, { limite: 6 });
+                $('recLugT').textContent = rec.zonas && rec.zonas.grupos.length ? 'Zonas recurrentes' : 'Lugares recurrentes';
+                $('recNota').textContent = 'Recurrente = ' + rec.umbral + ' o más reportes en ' + rec.ventana_dias + ' días (' + A.rangoTexto(rec.ventana.desde, rec.ventana.hasta) + ').';
+
+                // Resumen en lenguaje claro, solo con cifras reales
+                var recurrentes = rec.categorias.filter(function (c) { return c.recurrente; });
+                var lugaresRec = (rec.zonas && rec.zonas.grupos.length ? rec.zonas.grupos : rec.lugares).filter(function (g) { return g.recurrente; });
+                var ca = comp.actual, cb = comp.anterior;
+                var puntos = [];
+                puntos.push(pl(i.total, 'reporte', 'reportes') + ': ' + pl(i.abiertos, 'abierto', 'abiertos') + ' y ' + pl(i.cerrados, 'cerrado', 'cerrados') + ' (' + pl(i.resueltos, 'resuelto', 'resueltos') + ', ' + pl(i.duplicados, 'duplicado', 'duplicados') + ' y ' + n(i.no_requiere) + (i.no_requiere === 1 ? ' que no requería atención' : ' que no requerían atención') + ').');
+                if (i.dias_mediana_resolucion != null) puntos.push('Tiempo de resolución: mediana de ' + SMS.duracionDias(i.dias_mediana_resolucion) + ' y promedio de ' + SMS.duracionDias(i.dias_promedio_resolucion) + ' (' + i.resueltos_con_fecha + ' resueltos).');
+                puntos.push('Del ' + SMS.fecha(ca.desde) + ' al ' + SMS.fecha(ca.hasta) + ' se recibieron ' + n(ca.recibidos) + ' reportes, frente a ' + n(cb.recibidos) + ' en el periodo de comparación.');
+                if (i.vencidos) puntos.push(n(i.vencidos) + ' reportes abiertos ya vencieron su plazo.');
+                if (i.abiertos_sin_plazo) puntos.push(n(i.abiertos_sin_plazo) + ' de ' + n(i.abiertos) + ' reportes abiertos no tienen fecha compromiso ni plazo por riesgo.');
+                puntos.push(i.pendientes_evaluar ? n(i.pendientes_evaluar) + ' reportes abiertos están pendientes de evaluación de riesgo' + (d.matriz.validada ? '.' : ' (la matriz de riesgo aún no está validada).') : 'Todos los reportes abiertos tienen evaluación de riesgo.');
+                if (recurrentes.length) puntos.push('Categorías recurrentes: ' + recurrentes.slice(0, 4).map(function (c) { return c.categoria + ' (' + c.en_ventana + ')'; }).join(', ') + '.');
+                if (lugaresRec.length) puntos.push('Lugares recurrentes: ' + lugaresRec.slice(0, 4).map(function (g) { return g.etiqueta + ' (' + g.en_ventana + ')'; }).join(', ') + '.');
+                $('resumen').innerHTML = puntos.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('');
+                $('cuadre').textContent = 'Cuadre: ' + n(i.total) + ' = ' + pl(i.nuevos, 'nuevo', 'nuevos') + ' + ' + n(i.en_atencion) + ' en atención + ' + pl(i.resueltos, 'resuelto', 'resueltos') + ' + ' + pl(i.duplicados, 'duplicado', 'duplicados') + ' + ' + pl(i.no_requiere, 'no requiere atención', 'no requieren atención') + '. Cada reporte cuenta una vez aunque tenga varias áreas.';
+                $('filtrosTxt').textContent = lista.filtros.length
+                    ? 'Filtros aplicados: ' + lista.filtros.map(function (f) { return f.etiqueta + ': ' + f.valor; }).join(' · ')
+                    : 'Todos los reportes registrados, sin filtros.';
+                var k = [
+                    ['Total', n(i.total)], ['Nuevos', n(i.nuevos)], ['En atención', n(i.en_atencion)], ['Resueltos', n(i.resueltos)],
+                    ['Duplicado / No requiere', n(i.duplicados + i.no_requiere)],
+                    ['Cerrados', i.porcentaje_cerrados == null ? null : n(i.porcentaje_cerrados, 1) + ' %'],
+                    ['Resolución (mediana)', i.dias_mediana_resolucion == null ? null : SMS.duracionDias(i.dias_mediana_resolucion)],
+                    ['Pendientes de evaluar', n(i.pendientes_evaluar)], ['Alto riesgo', i.evaluados ? n(i.alto_riesgo) : null],
+                    ['Vencidos', i.con_fecha ? n(i.vencidos) : null]
+                ];
+                $('kpis').innerHTML = k.map(function (x) { return '<div><span>' + esc(x[0]) + '</span>' + (x[1] === null ? '<b class="nd">Sin datos</b>' : '<b>' + x[1] + '</b>') + '</div>'; }).join('');
+
+                G.columnas($('g-mensual'), {
+                    etiquetas: a.mensual.map(function (m) { return m.mes; }), formatoX: SMS.mes, alto: 230,
+                    series: [
+                        { nombre: 'Ya cerrados', color: 'var(--s1)', valores: a.mensual.map(function (m) { return m.cerrados; }) },
+                        { nombre: 'Siguen abiertos', color: 'var(--s2)', valores: a.mensual.map(function (m) { return m.abiertos; }) }
+                    ],
+                    detalleCorto: function (k) { var m = a.mensual[k]; return m.recibidos ? Math.round(m.cerrados / m.recibidos * 100) + ' % cerrado' : ''; },
+                    detalle: function (k) { var m = a.mensual[k]; return m.recibidos ? m.cerrados + (m.cerrados === 1 ? ' cerrado · ' : ' cerrados · ') + Math.round(m.cerrados / m.recibidos * 100) + ' %' : ''; }
+                });
+                G.segmentada($('g-estatus'), { partes: a.por_estatus.map(function (e) { return { nombre: e.estado + ' · ' + SMS.ESTADOS[e.estado], valor: e.n, color: COLOR_ESTADO[e.estado] }; }) });
+                G.barras($('g-categorias'), { series: [{ nombre: 'Reportes', color: 'var(--s1)' }], filas: a.categorias.slice(0, 8).map(function (c) { return { nombre: c.categoria, valores: [c.n] }; }) });
+                G.barras($('g-areas'), {
+                    series: [{ nombre: 'Abiertos', color: 'var(--s2)' }, { nombre: 'Cerrados', color: 'var(--s1)' }],
+                    filas: a.por_area.slice(0, 8).map(function (x) { return { nombre: x.nombre + (x.activo ? '' : ' (inactiva)'), valores: [x.abiertos, x.cerrados] }; })
+                });
+                var evaluados = a.riesgo.celdas.reduce(function (s, c) { return s + c.n; }, 0);
+                if (evaluados) G.matriz($('g-riesgo'), { matriz: d.matriz, conteos: a.riesgo.celdas });
+                else G.vacio($('g-riesgo'), 'Sin evaluaciones de riesgo', a.riesgo.sin_evaluar + ' reporte(s) sin evaluar.', 'shield');
+                $('notaMatriz').textContent = d.matriz.validada ? 'Matriz de riesgo validada institucionalmente.' : 'Matriz con los criterios del Manual SMS (numeral 5.3), pendiente de confirmar en el sistema.';
+
+                $('cuentaListado').textContent = '(' + n(lista.filas.length) + (lista.total > lista.filas.length ? ' de ' + n(lista.total) : '') + ')';
+                $('listado').innerHTML = lista.filas.length ? lista.filas.map(function (f) {
+                    var areas = (f.areas_responsables.length ? f.areas_responsables : f.areas_notificadas).join(', ');
+                    return '<tr><td class="mono" style="white-space:nowrap">' + esc(f.folio) + '</td><td style="white-space:nowrap">' + SMS.fecha(f.fecha) + '</td><td>' + esc(f.tipo_problema) + '</td><td>' + esc(areas || '—') + '</td><td>' + SMS.estado(f.estado) + '</td><td>' + SMS.riesgo(f.riesgo, d.matriz.niveles) + '</td><td>' + SMS.semaforo(f, i.dias_aviso, { sinDetalle: true }) + '</td></tr>';
+                }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--n500)">Sin reportes con estos filtros.</td></tr>';
+
+                $('hoja').setAttribute('aria-busy', 'false');
+                $('btnImprimir').disabled = false;
+                if (autoImprimir) setTimeout(function () { window.print(); }, 600);
+            } catch (e) {
+                $('filtrosTxt').innerHTML = '<span style="color:var(--r600)">No se pudo generar el reporte: ' + esc(e.message) + '</span>';
+            }
+        }
+        $('btnImprimir').addEventListener('click', function () { window.print(); });
+        iniciar();
+    })();
+    </script>
+</body>
+</html>

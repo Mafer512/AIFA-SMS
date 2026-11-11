@@ -1,0 +1,58 @@
+SMS · S.A.G.A. · Aeropuerto Internacional Felipe Ángeles
+Copia completa del sistema de reportes de Seguridad Operacional
+Generada el 11 de noviembre de 2026 · versión f61102e (la misma que está en GitHub: Mafer512/SMS)
+
+
+QUÉ CONTIENE
+  - El sistema completo: código y dependencias (carpeta node_modules), listo para
+    funcionar sin internet.
+  - base-de-datos\aifa_rsm_2026-11-11.sql: respaldo de la base real (52 reportes,
+    usuarios, áreas, catálogos, matriz de riesgo y bitácora).
+  - uploads\: fotos de evidencia guardadas en el equipo.
+  - .env: configuración de la computadora donde se generó.
+  - Iniciar SMS.bat e Instalar en otra computadora.bat.
+
+
+DATOS PERSONALES
+  Contiene nombres y teléfonos de quienes reportan. Guarda y comparte esta carpeta
+  solo en equipos y medios autorizados.
+
+
+EN ESTA COMPUTADORA
+  Doble clic en "Iniciar SMS.bat". Se abre la pantalla de acceso
+  (http://localhost:3000/login); inicia sesión con tu usuario de siempre.
+  - Si el SMS ya estaba en marcha, solo abre la pantalla de acceso.
+  - Usa la misma base de datos (aifa_rsm) que el sistema actual de este equipo.
+  - Para apagarlo, cierra la ventana negra que se abre.
+
+
+EN OTRA COMPUTADORA (Windows)
+  1. Instala Node.js 18 o más reciente (https://nodejs.org) y MySQL 8
+     (https://dev.mysql.com/downloads/installer/).
+  2. Copia esta carpeta completa (AIFA-SMS).
+  3. Doble clic en "Instalar en otra computadora.bat". Pide los datos de MySQL
+     (Enter acepta los valores normales), crea la base, importa el respaldo y
+     guarda la configuración. Si la base ya existe, solo la reemplaza si escribes SI.
+  4. Doble clic en "Iniciar SMS.bat" e inicia sesión con los mismos usuarios y
+     contraseñas de siempre.
+  Si faltan las dependencias o son de otra versión de Node.js, el instalador
+  ejecuta npm install (requiere internet).
+
+
+DESCARGADO DESDE GITHUB (Mafer512/AIFA-SMS)
+  La versión de GitHub no trae datos: ni el respaldo de la base, ni fotos, ni la
+  configuración (.env), ni node_modules. El instalador descarga las dependencias,
+  crea la base vacía con los catálogos y, al abrir "Iniciar SMS.bat", el primer
+  administrador se crea con el "código de configuración inicial" que muestra la
+  ventana del SMS.
+
+
+INICIO DE SESIÓN
+  Los usuarios y contraseñas son los mismos del sistema actual. Al arrancar, la
+  ventana del SMS muestra un "código de configuración inicial": sirve para crear
+  una cuenta de administrador desde esa misma computadora si hiciera falta.
+
+
+MÁS INFORMACIÓN
+  README_SMS.md (funcionamiento y migraciones) y DESPLIEGUE_HOSTINGER.md
+  (publicación en internet).

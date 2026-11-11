@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matriz de riesgo · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .config-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+        @media (min-width: 1100px) { .config-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } }
+        .pinceles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .pincel { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--n200); background: var(--sf); font: 600 13px var(--fx); color: var(--n800); cursor: pointer; }
+        .pincel i { width: 12px; height: 12px; border-radius: 3px; background: var(--c); }
+        .pincel[aria-pressed="true"] { border-color: var(--n900); box-shadow: inset 0 0 0 1px var(--n900); }
+        .pincel:focus-visible { outline: none; box-shadow: var(--focus); }
+        .tabla-edit { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        .tabla-edit th { text-align: left; font: 700 10.5px var(--ft); letter-spacing: .1em; text-transform: uppercase; color: var(--n600); padding: 0 6px 8px; }
+        .tabla-edit td { padding: 4px 6px; vertical-align: middle; }
+        .tabla-edit input[type="text"], .tabla-edit input[type="number"] { height: 36px; font-size: 13.5px; }
+        .tabla-edit input[type="color"] { width: 44px; height: 36px; padding: 2px; border: 1px solid var(--n200); border-radius: 8px; background: var(--sf-in); cursor: pointer; }
+        .tabla-edit .cod { width: 70px; }
+        .tabla-edit .plazo { width: 90px; }
+        .tabla-scroll-x { overflow-x: auto; }
+        .barra-guardar { position: sticky; bottom: 0; z-index: 20; margin-top: 24px; padding: 14px 0; background: linear-gradient(to top, var(--n50) 70%, transparent); }
+        .barra-guardar .sg-wrap { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .barra-guardar .estado-cambios { margin-right: auto; font-size: 13px; color: var(--n600); }
+        .solo-lectura input, .solo-lectura textarea, .solo-lectura select { pointer-events: none; }
+        .tabla-cons { min-width: 980px; }
+        .tabla-cons td { vertical-align: top; }
+        .tabla-cons textarea { min-height: 64px; font-size: 12.5px; line-height: 1.4; padding: 6px 8px; resize: vertical; }
+        .tabla-cons .nom { width: 170px; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Configuración · SMS</span>
+                <h1>Matriz de riesgo operacional</h1>
+                <p>Define los niveles de probabilidad y severidad, la clasificación de cada celda, los colores y la prioridad de atención. Los cambios aplican a las evaluaciones nuevas; las anteriores conservan su clasificación original.</p>
+            </header>
+
+<%- include('partials/sms-nav', { actual: 'matriz' }) %>
+
+            <div id="avisos" class="sg-stack"></div>
+
+            <div class="config-grid" id="contenido" style="margin-top:20px" hidden>
+                <div class="sg-stack" style="min-width:0">
+                    <section class="sg-card">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg>Clasificación de celdas</h2>
+                        </div>
+                        <div class="sg-card__body">
+                            <p class="sg-help" style="margin-bottom:12px" id="ayudaPincel">Elige un nivel y haz clic en las celdas para asignarlo.</p>
+                            <div class="pinceles" id="pinceles" role="group" aria-label="Nivel a asignar"></div>
+                            <div id="editorMatriz"></div>
+                        </div>
+                    </section>
+
+                    <section class="sg-card">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-list"/></svg>Niveles de riesgo</h2>
+                            <button type="button" class="btn btn-secondary btn-sm editar" id="btnNivel"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Agregar nivel</button>
+                        </div>
+                        <div class="sg-card__body tabla-scroll-x">
+                            <table class="tabla-edit">
+                                <thead><tr><th>Color</th><th>Nombre</th><th>Prioridad de atención</th><th>Plazo (días)</th><th title="Cuenta como alto riesgo en indicadores y alertas">Alto riesgo</th><th><span class="sr-only">Quitar</span></th></tr></thead>
+                                <tbody id="niveles"></tbody>
+                            </table>
+                            <p class="sg-help" style="margin-top:10px">El plazo es opcional. Si se define, al evaluar un reporte se calcula su fecha límite de atención y cuenta para "vencidos" y "próximos a vencer".</p>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="sg-stack" style="min-width:0">
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trend"/></svg>Probabilidad</h2></div>
+                        <div class="sg-card__body tabla-scroll-x">
+                            <table class="tabla-edit"><thead><tr><th>Valor</th><th>Nombre</th><th>Descripción</th></tr></thead><tbody id="probabilidad"></tbody></table>
+                        </div>
+                    </section>
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-warn"/></svg>Severidad</h2></div>
+                        <div class="sg-card__body tabla-scroll-x">
+                            <table class="tabla-edit"><thead><tr><th>Valor</th><th>Código</th><th>Nombre</th><th>Descripción</th></tr></thead><tbody id="severidad"></tbody></table>
+                        </div>
+                    </section>
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-bell"/></svg>Alertas y validación</h2></div>
+                        <div class="sg-card__body sg-stack">
+                            <div class="sg-field">
+                                <label for="diasAviso">Días de anticipación para "próximo a vencer"</label>
+                                <input type="number" id="diasAviso" min="1" max="60" style="max-width:140px">
+                            </div>
+                            <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px">
+                                <input type="checkbox" id="validada" style="margin-top:2px">
+                                <span><strong>Matriz validada institucionalmente</strong><br><span class="sg-help">Márcalo solo cuando la Gerencia de SMS apruebe estos criterios. <strong>Las evaluaciones de riesgo solo se habilitan con la matriz validada.</strong> Al guardar se registran tu nombre y la fecha; si cambias criterios con la casilla marcada, se registra como una nueva validación.</span></span>
+                            </label>
+                            <div class="sg-field">
+                                <label for="refValidacion">Documento de aprobación</label>
+                                <input type="text" id="refValidacion" maxlength="300" placeholder="Ej. Acta del Comité de Seguridad Operacional núm. …">
+                            </div>
+                            <div class="sg-field">
+                                <label for="nota">Nota</label>
+                                <textarea id="nota" maxlength="500" style="min-height:80px" placeholder="Ej. Aprobada en sesión del Comité de Seguridad, oficio…"></textarea>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="sg-card" style="grid-column:1 / -1;min-width:0">
+                    <div class="sg-card__head">
+                        <h2 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-book"/></svg>Severidad por tipo de consecuencia</h2>
+                        <button type="button" class="btn btn-secondary btn-sm editar" id="btnConsecuencia"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-plus"/></svg>Agregar tipo</button>
+                    </div>
+                    <div class="sg-card__body">
+                        <p class="sg-help" style="margin-bottom:12px">Los textos de la tabla de gravedad del numeral 5.3 del Manual SMS, agrupados según lo que se afecta. Se muestra como guía al evaluar el riesgo de un reporte. Una casilla vacía significa que el manual no describe ese nivel para ese tipo.</p>
+                        <div id="consVacio" hidden></div>
+                        <div class="tabla-scroll-x">
+                            <table class="tabla-edit tabla-cons">
+                                <thead id="consCabecera"></thead>
+                                <tbody id="consecuencias"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="barra-guardar" id="barraGuardar" hidden>
+            <div class="sg-wrap">
+                <span class="estado-cambios" id="estadoCambios">Sin cambios</span>
+                <button type="button" class="btn btn-ghost" id="btnReferencia"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-refresh"/></svg>Cargar valores de referencia</button>
+                <button type="button" class="btn btn-secondary" id="btnDescartar" disabled>Descartar cambios</button>
+                <button type="button" class="btn btn-primary" id="btnGuardar" disabled><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-save"/></svg>Guardar matriz</button>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic;
+        var original = null, actual = null, referencia = null, pincel = null, editable = false;
+
+        function copia(o) { return JSON.parse(JSON.stringify(o)); }
+        function sucio() { return JSON.stringify(original) !== JSON.stringify(actual); }
+        function marcar() {
+            var s = sucio();
+            $('btnGuardar').disabled = !s || !editable;
+            $('btnDescartar').disabled = !s;
+            $('estadoCambios').textContent = s ? 'Hay cambios sin guardar' : 'Sin cambios';
+        }
+
+        function pintarAvisos() {
+            var html = '';
+            html += actual.validada
+                ? '<div class="sg-banner">' + ic('ok') + '<span><strong>Matriz validada.</strong> ' + (original.validada && original.validacion && original.validacion.por ? 'Validada por ' + esc(original.validacion.por) + (original.validacion.fecha ? ' el ' + SMS.fechaHora(original.validacion.fecha) : '') + (original.validacion.referencia ? ' · ' + esc(original.validacion.referencia) : '') + '. ' : 'Se registrará tu nombre al guardar. ') + esc(actual.nota || '') + '</span></div>'
+                : '<div class="sg-banner warn">' + ic('warn') + '<span><strong>Matriz pendiente de confirmar en el sistema.</strong> Los valores son los criterios del numeral 5.3 del Manual SMS del AIFA (Revisión 02, noviembre 2025). Un administrador debe marcarla como validada para que se puedan registrar evaluaciones de riesgo.</span></div>';
+            if (!editable) html += '<div class="sg-banner info">' + ic('lock') + '<span>Vista de consulta. Solo un usuario con rol de administrador puede modificar la matriz. <a href="/login?volver=/admin/matriz-riesgo">Iniciar sesión</a></span></div>';
+            $('avisos').innerHTML = html;
+        }
+
+        function pintarPinceles() {
+            if (!pincel || !actual.niveles.some(function (n) { return n.clave === pincel; })) pincel = actual.niveles[0].clave;
+            $('pinceles').innerHTML = actual.niveles.map(function (n) {
+                return '<button type="button" class="pincel" data-pincel="' + esc(n.clave) + '" aria-pressed="' + (n.clave === pincel) + '" style="--c:' + esc(n.color) + '"><i></i>' + esc(n.nombre) + '</button>';
+            }).join('');
+            $('pinceles').hidden = !editable;
+            $('ayudaPincel').hidden = !editable;
+        }
+
+        function pintarMatriz() {
+            var sev = actual.severidad.slice().sort(function (a, b) { return b.valor - a.valor; });
+            var prob = actual.probabilidad.slice().sort(function (a, b) { return b.valor - a.valor; });
+            var niv = {}; actual.niveles.forEach(function (n) { niv[n.clave] = n; });
+            var html = '<div class="matriz" role="grid" aria-label="Clasificación de celdas"><div class="esq">Probabilidad<br>↓ · Severidad →</div>';
+            sev.forEach(function (s) { html += '<div class="eje-x"><b>' + esc(s.codigo) + '</b><span>' + esc(s.nombre) + '</span></div>'; });
+            prob.forEach(function (p) {
+                html += '<div class="eje-y"><b>' + p.valor + '</b><span>' + esc(p.nombre) + '</span></div>';
+                sev.forEach(function (s) {
+                    var k = p.valor + '-' + s.valor;
+                    var n = niv[actual.celdas[k]] || { color: '#8895A0', nombre: '—' };
+                    var etiqueta = p.valor + s.codigo + ' · ' + n.nombre;
+                    html += (editable ? '<button type="button" class="celda" data-celda="' + k + '"' : '<div class="celda"') +
+                        ' style="--c:' + esc(n.color) + ';--tc:' + SMS.textoSobre(n.color) + '" title="' + esc(etiqueta) + '" aria-label="' + esc(etiqueta) + '">' +
+                        '<span class="cod">' + p.valor + esc(s.codigo) + '</span><span style="font-size:11px">' + esc(String(n.nombre).split('·')[0].trim()) + '</span>' +
+                        (editable ? '</button>' : '</div>');
+                });
+            });
+            $('editorMatriz').innerHTML = html + '</div>';
+        }
+
+        function campo(valor, attrs) {
+            return '<input type="text" value="' + esc(valor == null ? '' : valor) + '" ' + attrs + (editable ? '' : ' readonly') + '>';
+        }
+
+        function pintarNiveles() {
+            $('niveles').innerHTML = actual.niveles.map(function (n, i) {
+                return '<tr data-i="' + i + '">' +
+                    '<td><input type="color" value="' + esc(n.color) + '" data-k="color" aria-label="Color del nivel"' + (editable ? '' : ' disabled') + '></td>' +
+                    '<td>' + campo(n.nombre, 'data-k="nombre" maxlength="60" aria-label="Nombre del nivel"') + '</td>' +
+                    '<td>' + campo(n.prioridad, 'data-k="prioridad" maxlength="60" aria-label="Prioridad"') + '</td>' +
+                    '<td><input type="number" class="plazo" min="1" max="365" value="' + (n.plazo_dias == null ? '' : n.plazo_dias) + '" data-k="plazo_dias" placeholder="—" aria-label="Plazo en días"' + (editable ? '' : ' readonly') + '></td>' +
+                    '<td style="text-align:center"><input type="checkbox" data-k="es_alto"' + (n.es_alto ? ' checked' : '') + (editable ? '' : ' disabled') + ' aria-label="Cuenta como alto riesgo"></td>' +
+                    '<td>' + (editable && actual.niveles.length > 2 ? '<button type="button" class="btn btn-ghost btn-sm btn-icon" data-quitar="' + i + '" aria-label="Quitar nivel" title="Quitar nivel">' + ic('trash') + '</button>' : '') + '</td></tr>';
+            }).join('');
+            $('btnNivel').hidden = !editable || actual.niveles.length >= 6;
+        }
+
+        function pintarEjes() {
+            $('probabilidad').innerHTML = actual.probabilidad.map(function (p, i) {
+                return '<tr data-eje="probabilidad" data-i="' + i + '"><td><b class="mono">' + p.valor + '</b></td><td>' + campo(p.nombre, 'data-k="nombre" maxlength="60"') + '</td><td>' + campo(p.descripcion, 'data-k="descripcion" maxlength="500"') + '</td></tr>';
+            }).join('');
+            $('severidad').innerHTML = actual.severidad.map(function (s, i) {
+                return '<tr data-eje="severidad" data-i="' + i + '"><td><b class="mono">' + s.valor + '</b></td><td>' + campo(s.codigo, 'class="cod" data-k="codigo" maxlength="3"') + '</td><td>' + campo(s.nombre, 'data-k="nombre" maxlength="60"') + '</td><td>' + campo(s.descripcion, 'data-k="descripcion" maxlength="500"') + '</td></tr>';
+            }).join('');
+            $('diasAviso').value = actual.alertas.dias_aviso_vencimiento;
+            $('validada').checked = actual.validada;
+            $('nota').value = actual.nota || '';
+            $('refValidacion').value = (actual.validacion && actual.validacion.referencia) || '';
+            $('refValidacion').readOnly = !editable;
+            [$('diasAviso'), $('nota')].forEach(function (e) { e.readOnly = !editable; });
+            $('validada').disabled = !editable;
+        }
+
+        function pintarConsecuencias() {
+            if (!Array.isArray(actual.consecuencias)) actual.consecuencias = [];
+            var sev = actual.severidad.slice().sort(function (a, b) { return b.valor - a.valor; });
+            var lista = actual.consecuencias;
+            var vacio = $('consVacio');
+            vacio.hidden = lista.length > 0;
+            vacio.innerHTML = lista.length ? '' : '<div class="sg-empty" style="padding:20px 12px">' + ic('book') + '<b>Sin descripciones por tipo de consecuencia</b>' +
+                (editable && referencia && (referencia.consecuencias || []).length
+                    ? 'Puedes cargar la propuesta de referencia y ajustarla.<div style="margin-top:12px"><button type="button" class="btn btn-secondary btn-sm" id="btnCargarCons">' + ic('refresh') + 'Cargar propuesta de referencia</button></div>'
+                    : 'La severidad se evalúa solo con las descripciones generales.') + '</div>';
+            $('consCabecera').innerHTML = lista.length
+                ? '<tr><th>Tipo de consecuencia</th>' + sev.map(function (s) { return '<th>' + esc(s.codigo + ' · ' + s.nombre) + '</th>'; }).join('') + '<th><span class="sr-only">Quitar</span></th></tr>'
+                : '';
+            $('consecuencias').innerHTML = lista.map(function (c, i) {
+                return '<tr data-cons="' + i + '"><td>' + campo(c.nombre, 'class="nom" data-k="nombre" maxlength="60" aria-label="Tipo de consecuencia"') + '</td>' +
+                    sev.map(function (s) {
+                        return '<td><textarea data-s="' + s.valor + '" maxlength="500" aria-label="' + esc(c.nombre + ', severidad ' + s.codigo) + '"' + (editable ? '' : ' readonly') + '>' + esc((c.niveles && c.niveles[s.valor]) || '') + '</textarea></td>';
+                    }).join('') +
+                    '<td>' + (editable ? '<button type="button" class="btn btn-ghost btn-sm btn-icon" data-quitar-cons="' + i + '" aria-label="Quitar tipo de consecuencia" title="Quitar">' + ic('trash') + '</button>' : '') + '</td></tr>';
+            }).join('');
+            $('btnConsecuencia').hidden = !editable || lista.length >= 12;
+        }
+
+        function pintarTodo() {
+            pintarAvisos(); pintarPinceles(); pintarMatriz(); pintarNiveles(); pintarEjes(); pintarConsecuencias(); marcar();
+            $('contenido').hidden = false;
+            $('barraGuardar').hidden = !editable;
+            $('contenido').classList.toggle('solo-lectura', !editable);
+        }
+
+        // ------------------------------------------------------------ edición
+        document.addEventListener('click', function (e) {
+            if (!editable) return;
+            var p = e.target.closest('[data-pincel]');
+            if (p) { pincel = p.dataset.pincel; pintarPinceles(); return; }
+            var c = e.target.closest('[data-celda]');
+            if (c) { actual.celdas[c.dataset.celda] = pincel; pintarMatriz(); marcar(); var b = document.querySelector('[data-celda="' + c.dataset.celda + '"]'); if (b) b.focus(); return; }
+            if (e.target.closest('#btnCargarCons')) {
+                actual.consecuencias = copia(referencia.consecuencias || []);
+                pintarConsecuencias(); marcar();
+                return;
+            }
+            var qc = e.target.closest('[data-quitar-cons]');
+            if (qc) {
+                var nombreCons = actual.consecuencias[+qc.dataset.quitarCons].nombre;
+                if (!confirm('¿Quitar el tipo de consecuencia "' + nombreCons + '"?')) return;
+                actual.consecuencias.splice(+qc.dataset.quitarCons, 1);
+                pintarConsecuencias(); marcar();
+                return;
+            }
+            var q = e.target.closest('[data-quitar]');
+            if (q) {
+                var i = +q.dataset.quitar, quitado = actual.niveles[i].clave;
+                actual.niveles.splice(i, 1);
+                var reemplazo = actual.niveles[Math.min(i, actual.niveles.length - 1)].clave;
+                Object.keys(actual.celdas).forEach(function (k) { if (actual.celdas[k] === quitado) actual.celdas[k] = reemplazo; });
+                pintarTodo();
+                SAGA.toast('Las celdas de ese nivel se reasignaron a "' + actual.niveles.find(function (n) { return n.clave === reemplazo; }).nombre + '"', 'info');
+            }
+        });
+        document.addEventListener('input', function (e) {
+            if (!editable || !actual) return;
+            var t = e.target;
+            var filaN = t.closest('#niveles tr');
+            var filaE = t.closest('tr[data-eje]');
+            var filaC = t.closest('tr[data-cons]');
+            if (filaC) {
+                var cons = actual.consecuencias[+filaC.dataset.cons];
+                if (t.dataset.k === 'nombre') cons.nombre = t.value;
+                else if (t.dataset.s) { cons.niveles = cons.niveles || {}; cons.niveles[t.dataset.s] = t.value; }
+            } else if (filaN && t.dataset.k) {
+                var n = actual.niveles[+filaN.dataset.i];
+                if (t.dataset.k === 'es_alto') n.es_alto = t.checked;
+                else if (t.dataset.k === 'plazo_dias') n.plazo_dias = t.value === '' ? null : Number(t.value);
+                else n[t.dataset.k] = t.type === 'color' ? t.value.toUpperCase() : t.value;
+                if (t.dataset.k === 'color' || t.dataset.k === 'nombre') { pintarPinceles(); pintarMatriz(); }
+            } else if (filaE && t.dataset.k) {
+                actual[filaE.dataset.eje][+filaE.dataset.i][t.dataset.k] = t.value;
+                pintarMatriz();
+            } else if (t.id === 'diasAviso') actual.alertas.dias_aviso_vencimiento = Number(t.value);
+            else if (t.id === 'nota') actual.nota = t.value;
+            else if (t.id === 'refValidacion') actual.validacion = Object.assign({}, actual.validacion || {}, { referencia: t.value });
+            else if (t.id === 'validada') { actual.validada = t.checked; pintarAvisos(); }
+            marcar();
+        });
+        document.addEventListener('change', function (e) {
+            if (e.target.dataset && e.target.dataset.k === 'es_alto') { var ev = new Event('input', { bubbles: true }); e.target.dispatchEvent(ev); }
+            if (e.target.id === 'validada') { e.target.dispatchEvent(new Event('input', { bubbles: true })); }
+        });
+
+        $('btnNivel').addEventListener('click', function () {
+            var i = 1, clave;
+            do { clave = 'nivel_' + (actual.niveles.length + i++); } while (actual.niveles.some(function (n) { return n.clave === clave; }));
+            actual.niveles.push({ clave: clave, nombre: 'Nuevo nivel', prioridad: 'Por definir', color: '#4A555E', plazo_dias: null, es_alto: false });
+            pintarTodo();
+        });
+        $('btnConsecuencia').addEventListener('click', function () {
+            if (!Array.isArray(actual.consecuencias)) actual.consecuencias = [];
+            actual.consecuencias.push({ clave: '', nombre: 'Nuevo tipo', niveles: { 1: '', 2: '', 3: '', 4: '', 5: '' } });
+            pintarConsecuencias(); marcar();
+            var filas = document.querySelectorAll('#consecuencias tr');
+            var ult = filas[filas.length - 1];
+            if (ult) ult.querySelector('input').focus();
+        });
+        $('btnDescartar').addEventListener('click', function () { actual = copia(original); pintarTodo(); });
+        $('btnReferencia').addEventListener('click', function () {
+            if (!confirm('¿Cargar los criterios del Manual SMS (numeral 5.3)? Reemplazará lo que ves en pantalla (aún no se guarda).')) return;
+            actual = copia(referencia); pintarTodo();
+        });
+        $('btnGuardar').addEventListener('click', async function () {
+            var msg = actual.validada && !original.validada
+                ? '¿Guardar y marcar la matriz como VALIDADA oficialmente? Confirma que la Gerencia de SMS aprobó estos criterios.'
+                : '¿Guardar los cambios de la matriz? Aplicarán a las evaluaciones nuevas.';
+            if (!confirm(msg)) return;
+            var b = this;
+            b.disabled = true;
+            try {
+                var d = await SMS.api('/api/sms/matriz', { method: 'PUT', json: { matriz: actual } });
+                original = copia(d.matriz); actual = copia(d.matriz);
+                pintarTodo();
+                SAGA.toast('Matriz de riesgo guardada', 'success');
+            } catch (e) {
+                SAGA.toast(e.message, 'error');
+                marcar();
+            }
+        });
+        window.addEventListener('beforeunload', function (e) { if (editable && actual && sucio()) { e.preventDefault(); e.returnValue = ''; } });
+
+        Promise.all([SMS.api('/api/sms/matriz'), SMS.sesion()]).then(function (r) {
+            original = copia(r[0].matriz); actual = copia(r[0].matriz); referencia = r[0].referencia;
+            editable = !!(r[1] && r[1].capacidades.indexOf('configurar_matriz') >= 0);
+            pintarTodo();
+        }).catch(function (e) {
+            $('avisos').innerHTML = '<div class="sg-banner crit">' + ic('crit') + '<span>No se pudo cargar la matriz: ' + esc(e.message) + '</span></div>';
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitácora de auditoría · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <style>
+        .filtro-aud { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+        .filtro-aud .sg-field { min-width: 150px; }
+        .filtro-aud .sg-field:first-child { min-width: 240px; }
+        .sg-table td.cuando { white-space: nowrap; }
+        .detalle-aud { font-size: 12.5px; color: var(--n600); margin-top: 4px; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes/general', texto: 'Vista general', icono: 'table', estilo: 'btn-ghost' },
+        { href: '/admin/reportes-rapidos', texto: 'Administración', icono: 'settings', estilo: 'btn-secondary' }
+    ]
+}) %>
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Control · SMS</span>
+                <h1>Bitácora de auditoría</h1>
+                <p>Registro de los cambios relevantes con su autor, fecha e IP: evaluaciones de riesgo, compromisos, acciones correctivas, verificaciones, zonas, configuración (matriz, SPI) y exportaciones.</p>
+            </header>
+            <div id="aviso"></div>
+            <section id="zona" hidden>
+                <div class="filtro-aud" style="margin-bottom:16px">
+                    <div class="sg-field">
+                        <label for="fAccion">Tipo de movimiento</label>
+                        <select id="fAccion">
+                            <option value="">Todos</option>
+                            <option value="riesgo_evaluado">Evaluación de riesgo inicial</option>
+                            <option value="riesgo_residual_evaluado">Evaluación de riesgo residual</option>
+                            <option value="compromiso_asignado">Fecha compromiso asignada</option>
+                            <option value="compromiso_reprogramado">Fecha compromiso reprogramada</option>
+                            <option value="zona_asignada">Zona asignada</option>
+                            <option value="zona_retirada">Zona retirada</option>
+                            <option value="accion_registrada">Acción registrada</option>
+                            <option value="accion_en_proceso">Acción en proceso</option>
+                            <option value="accion_completada">Acción concluida</option>
+                            <option value="accion_verificada">Efectividad verificada</option>
+                            <option value="accion_reabierta">Acción reabierta</option>
+                            <option value="accion_cancelada">Acción cancelada</option>
+                            <option value="accion_reprogramada">Reprogramación</option>
+                            <option value="accion_evidencia">Evidencia agregada</option>
+                            <option value="accion_editada">Acción editada</option>
+                            <option value="matriz_actualizada">Cambio en la matriz</option>
+                            <option value="matriz_validada">Matriz validada</option>
+                            <option value="matriz_validacion_retirada">Validación de matriz retirada</option>
+                            <option value="spi_actualizados">Configuración de SPI</option>
+                            <option value="zonas_configuradas">Módulo de zonas</option>
+                            <option value="zona_creada">Zona creada</option>
+                            <option value="zona_actualizada">Zona actualizada</option>
+                            <option value="reporte_eliminado">Reporte eliminado</option>
+                            <option value="reporte_restaurado">Reporte restaurado</option>
+                            <option value="usuario_creado">Usuario creado</option>
+                            <option value="usuario_actualizado">Usuario actualizado</option>
+                            <option value="usuario_desactivado">Usuario desactivado</option>
+                            <option value="usuario_reactivado">Usuario reactivado</option>
+                            <option value="usuario_desbloqueado">Usuario desbloqueado</option>
+                            <option value="password_restablecida">Contraseña restablecida</option>
+                            <option value="password_cambiada">Contraseña cambiada</option>
+                            <option value="respaldo_creado">Respaldo manual</option>
+                            <option value="exportacion_excel">Exportación a Excel</option>
+                        </select>
+                    </div>
+                    <div class="sg-field">
+                        <label for="fFolio">Folio</label>
+                        <input type="text" id="fFolio" maxlength="50" placeholder="RSM-54" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div class="sg-field">
+                        <label for="fDesde">Desde</label>
+                        <input type="date" id="fDesde">
+                    </div>
+                    <div class="sg-field">
+                        <label for="fHasta">Hasta</label>
+                        <input type="date" id="fHasta">
+                    </div>
+                    <span class="contador" id="contador"></span>
+                </div>
+                <div class="sg-table-wrap">
+                    <table class="sg-table">
+                        <thead><tr><th>Fecha</th><th>Movimiento</th><th>Reporte</th><th>Usuario</th><th>IP</th></tr></thead>
+                        <tbody id="cuerpo"><tr><td colspan="5"><div class="sg-empty"><span class="sg-spinner"></span></div></td></tr></tbody>
+                    </table>
+                </div>
+                <div class="paginacion"><span></span><nav class="paginacion__pags" id="paginas" aria-label="Paginación"></nav></div>
+            </section>
+        </div>
+    </main>
+<%- include('partials/footer') %>
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = SMS.esc, ic = SMS.ic, pagina = 1;
+        var NOMBRES = {};
+        Array.prototype.forEach.call($('fAccion').options, function (o) { if (o.value) NOMBRES[o.value] = o.textContent; });
+
+        async function cargar() {
+            try {
+                var q = new URLSearchParams({ pagina: pagina });
+                if ($('fAccion').value) q.set('accion', $('fAccion').value);
+                if ($('fFolio').value.trim()) q.set('folio', $('fFolio').value.trim());
+                if ($('fDesde').value) q.set('desde', $('fDesde').value);
+                if ($('fHasta').value) q.set('hasta', $('fHasta').value);
+                var d = await SMS.api('/api/sms/auditoria?' + q.toString());
+                $('contador').textContent = SMS.numero(d.total) + ' registro(s)';
+                $('cuerpo').innerHTML = d.registros.length ? d.registros.map(function (r) {
+                    var quien = r.datos.usuario_nombre ? esc(r.datos.usuario_nombre) + '<span class="sub">' + esc([r.datos.usuario_rol, r.datos.departamento].filter(Boolean).join(' · ')) + '</span>' : '<span class="nd">Sin sesión</span>';
+                    return '<tr><td class="cuando">' + SMS.fechaHora(r.fecha) + '</td>' +
+                        '<td><strong style="font-weight:600">' + esc(NOMBRES[r.accion] || r.accion) + '</strong>' + (r.descripcion ? '<div class="detalle-aud">' + esc(r.descripcion) + '</div>' : '') + '</td>' +
+                        '<td>' + (r.folio ? (r.reporte_eliminado ? '<span class="sg-folio" title="Reporte eliminado">' + esc(r.folio) + '</span><span class="sub">Eliminado</span>' : '<a class="sg-folio" href="/reportes/' + encodeURIComponent(r.folio) + '">' + esc(r.folio) + '</a>') : '<span class="nd">—</span>') + '</td>' +
+                        '<td>' + quien + '</td><td class="mono" style="font-size:12px">' + esc(r.ip_address || '—') + '</td></tr>';
+                }).join('') : '<tr><td colspan="5"><div class="sg-empty">' + ic('inbox') + '<b>Sin registros</b>No hay movimientos con estos criterios.</div></td></tr>';
+                var paginas = Math.max(1, Math.ceil(d.total / d.por_pagina));
+                $('paginas').innerHTML = paginas > 1
+                    ? '<button type="button" class="pag" data-p="' + (pagina - 1) + '"' + (pagina <= 1 ? ' disabled' : '') + ' aria-label="Anterior">' + ic('chevron-left', 'ic-16') + '</button>' +
+                      '<span class="contador">Página ' + pagina + ' de ' + paginas + '</span>' +
+                      '<button type="button" class="pag" data-p="' + (pagina + 1) + '"' + (pagina >= paginas ? ' disabled' : '') + ' aria-label="Siguiente">' + ic('chevron-right', 'ic-16') + '</button>'
+                    : '';
+            } catch (e) {
+                $('cuerpo').innerHTML = '<tr><td colspan="5"><div class="sg-empty crit">' + ic('crit') + '<b>No se pudo cargar la bitácora</b>' + esc(e.message) + '</div></td></tr>';
+            }
+        }
+        ['fAccion', 'fDesde', 'fHasta'].forEach(function (id) { $(id).addEventListener('change', function () { pagina = 1; cargar(); }); });
+        var t; $('fFolio').addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { pagina = 1; cargar(); }, 400); });
+        $('paginas').addEventListener('click', function (e) { var b = e.target.closest('[data-p]'); if (b && !b.disabled) { pagina = +b.dataset.p; cargar(); } });
+
+        SMS.sesion().then(function (u) {
+            if (!u || u.capacidades.indexOf('ver_auditoria') < 0) {
+                $('aviso').innerHTML = '<div class="sg-banner info">' + ic('lock') + '<span>La bitácora solo está disponible para supervisión y administración. <a href="/login?volver=/admin/auditoria">Iniciar sesión</a></span></div>';
+                return;
+            }
+            $('zona').hidden = false;
+            cargar();
+        });
+    })();
+    </script>
+</body>
+</html>

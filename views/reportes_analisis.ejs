@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis estadístico · S.A.G.A. AIFA</title>
+<%- include('partials/head') %>
+    <script src="/js/sms-series.js"></script>
+    <script src="/js/sms-graficas.js"></script>
+    <script src="/js/sms-analisis.js"></script>
+    <style>
+        .barra-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+        .barra-filtros .sg-field { min-width: 150px; flex: 1 1 160px; }
+        .barra-filtros .sg-field--rango { flex: 2 1 300px; }
+        .barra-filtros .acciones { display: flex; gap: 8px; }
+        .graficas { margin-top: 20px; }
+        .zona-graficas { transition: opacity .2s ease; }
+        .zona-graficas.is-cargando { opacity: .5; }
+        .aviso-riesgo { margin-top: 14px; }
+        .niveles-riesgo { margin-top: 18px; }
+        .resumen-graf { margin: -4px 0 14px; font-size: 14px; color: var(--n700); }
+        .resumen-graf b { color: var(--n900); font-weight: 600; }
+    </style>
+</head>
+<body>
+<%- include('partials/appbar', {
+    enlaces: [
+        { href: '/reportes-rapidos', texto: 'Nuevo reporte', icono: 'file-plus', estilo: 'btn-ghost' },
+        { href: '/login', texto: 'Acceso', icono: 'login', estilo: 'btn-secondary' }
+    ]
+}) %>
+
+    <main class="sg-main">
+        <div class="sg-wrap">
+            <header class="sg-pagehead">
+                <span class="sg-kicker">Seguridad operacional · SMS</span>
+                <h1>Análisis estadístico de hallazgos</h1>
+                <p>Comportamiento de los reportes en el tiempo, desempeño por área, recurrencias, indicadores SPI y consistencia de los datos.</p>
+            </header>
+
+<%- include('partials/sms-nav', { actual: 'analisis' }) %>
+
+            <!-- Filtros: una sola fila sobre todo lo que afectan -->
+            <section class="sg-card" aria-labelledby="tFiltros">
+                <div class="sg-card__body">
+                    <h2 class="sr-only" id="tFiltros">Filtros del análisis</h2>
+                    <div class="presets" role="group" aria-label="Periodo">
+                        <button type="button" class="preset" data-preset="hoy" aria-pressed="false">Hoy</button>
+                        <button type="button" class="preset" data-preset="ayer" aria-pressed="false">Ayer</button>
+                        <button type="button" class="preset" data-preset="7" aria-pressed="false">Últimos 7 días</button>
+                        <button type="button" class="preset" data-preset="30" aria-pressed="false">Últimos 30 días</button>
+                        <button type="button" class="preset" data-preset="mes" aria-pressed="false">Mes actual</button>
+                        <button type="button" class="preset" data-preset="mes_anterior" aria-pressed="false">Mes anterior</button>
+                        <button type="button" class="preset" data-preset="90" aria-pressed="false">Últimos 90 días</button>
+                        <button type="button" class="preset" data-preset="anio" aria-pressed="false">Este año</button>
+                        <button type="button" class="preset" data-preset="todo" aria-pressed="true">Todo el historial</button>
+                    </div>
+                    <form class="barra-filtros" id="formFiltros" novalidate>
+                        <div class="sg-field sg-field--rango">
+                            <label for="f_desde">Periodo personalizado</label>
+                            <div class="rango">
+                                <input type="date" id="f_desde" name="desde" aria-label="Desde">
+                                <input type="date" id="f_hasta" name="hasta" aria-label="Hasta">
+                            </div>
+                        </div>
+                        <div class="sg-field">
+                            <label for="f_area">Área</label>
+                            <select id="f_area" name="area"><option value="">Todas</option></select>
+                        </div>
+                        <div class="sg-field">
+                            <label for="f_categoria">Categoría</label>
+                            <select id="f_categoria" name="categoria"><option value="">Todas</option></select>
+                        </div>
+                        <div class="agrupar">
+                            <span id="lblAgrupar">Agrupar por</span>
+                            <div class="segm" role="group" aria-labelledby="lblAgrupar" data-tip="Agrupación de las gráficas por fecha. Automático: por día hasta 2 meses, por semana hasta 6 meses y por mes en periodos más largos.">
+                                <button type="button" data-gran="auto" aria-pressed="true">Automático</button>
+                                <button type="button" data-gran="dia" aria-pressed="false">Día</button>
+                                <button type="button" data-gran="semana" aria-pressed="false">Semana</button>
+                                <button type="button" data-gran="mes" aria-pressed="false">Mes</button>
+                            </div>
+                        </div>
+                        <div class="acciones">
+                            <button type="button" class="btn btn-secondary" id="btnRestablecer"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-refresh"/></svg>Restablecer</button>
+                            <div class="menu">
+                                <button type="button" class="btn btn-secondary" data-menu aria-haspopup="true" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-download"/></svg>Exportar</button>
+                                <div class="menu__panel" hidden>
+                                    <div class="menu__t">Con los filtros activos</div>
+                                    <button type="button" class="menu__item" id="expPdf"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-print"/></svg><span>Informe ejecutivo (PDF)<small>Indicadores, comparativo, áreas, SPI y gráficas</small></span></button>
+                                    <button type="button" class="menu__item" id="expExcel"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg><span>Excel (.xlsx)<small>Listado y resumen</small></span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="activos" id="filtrosActivos" hidden>
+                        <span class="activos__t">Filtros activos:</span>
+                        <span id="chipsActivos" style="display:contents"></span>
+                    </div>
+                </div>
+            </section>
+
+            <div class="zona-graficas" id="zona">
+                <!-- Indicadores -->
+                <div class="sg-kpis sg-kpis--5" style="margin-top:20px" id="kpis">
+                    <div class="sg-kpi" data-tip="Cada reporte cuenta una sola vez aunque esté asignado a varias áreas"><div class="l">Total de reportes</div><div class="n" id="k-total">—</div><div class="d" id="k-total-d">&nbsp;</div></div>
+                    <div class="sg-kpi" data-tip="Cerrados = Resuelto + Duplicado + No requiere atención"><div class="l">Reportes cerrados</div><div class="n" id="k-cerrados">—</div><div class="d" id="k-cerrados-d">&nbsp;</div></div>
+                    <div class="sg-kpi" data-tip="Mediana del tiempo entre el reporte y su registro como Resuelto. Duplicado y No requiere atención no cuentan como resoluciones."><div class="l">Tiempo de resolución</div><div class="n" id="k-tiempo">—</div><div class="d" id="k-tiempo-d">&nbsp;</div></div>
+                    <div class="sg-kpi"><div class="l">Alto riesgo</div><div class="n" id="k-alto">—</div><div class="d" id="k-alto-d">&nbsp;</div></div>
+                    <div class="sg-kpi"><div class="l">Vencidos</div><div class="n" id="k-vencidos">—</div><div class="d" id="k-vencidos-d">&nbsp;</div></div>
+                </div>
+
+                <!-- Gráficas. Todas usan los mismos filtros de arriba y los datos de /api/sms/analisis
+                     (agregados en la base). Cada tarjeta: restablecer vista, PNG y vista de tabla. -->
+<%
+    const tarjetasGraf = [
+        { id: 'evolucion', ancha: true, icono: 'chart-line', titulo: 'Evolución de reportes',
+          sub: 'Recibidos por fecha del reporte y cerrados por fecha de cierre. Toca un periodo para filtrarlo; arrastra para acercar.', nota: true },
+        { id: 'periodos', ancha: true, icono: 'chart-bar', titulo: 'Reportes por periodo y estatus',
+          sub: 'Estatus vigente de los reportes recibidos en cada periodo. Toca una columna para filtrar ese periodo.', resumen: true },
+        { id: 'flujo', icono: 'activity', titulo: 'Flujo acumulado',
+          sub: 'Recibidos y cerrados acumulados; la distancia entre ambas curvas son los reportes pendientes.', nota: true },
+        { id: 'estatus', icono: 'pie', titulo: 'Distribución por estatus',
+          sub: 'Estatus vigente de cada reporte. Toca un estatus para filtrar.' },
+        { id: 'horas', icono: 'clock', titulo: 'Concentración por hora del día',
+          sub: 'Hora en que se registró cada reporte.', nota: true },
+        { id: 'tendencia', icono: 'trend', titulo: 'Tendencia de resolución',
+          sub: 'Días promedio para resolver, por mes de resolución' },
+        { id: 'areas', icono: 'building', titulo: 'Hallazgos por área',
+          sub: 'Áreas notificadas o responsables (15 con más reportes). Toca un área para filtrar.' },
+        { id: 'categorias', icono: 'tag', titulo: 'Categorías más frecuentes',
+          sub: 'Las 10 categorías con más reportes. Toca una para filtrar.' },
+        { id: 'tipos', ancha: true, icono: 'list', titulo: 'Reportes por tipo',
+          sub: 'Reportes voluntarios (prevenir) y obligatorios (eventos que ya causaron afectación), según el numeral 5.2.1 del Manual SMS. Toca un tipo para filtrar.', nota: true }
+    ];
+    function acciones(id, conVista) { %>
+                            <div class="viz-acciones">
+<%      if (conVista) { %>
+                                <button type="button" class="btn btn-ghost btn-sm" data-restablecer-viz="g-<%= id %>" hidden data-tip="Quitar el zoom y mostrar todas las series"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-refresh"/></svg>Restablecer vista</button>
+<%      } %>
+                                <button type="button" class="btn btn-ghost btn-sm btn-icon" data-png data-tip="Descargar como imagen PNG (con título y leyenda)" aria-label="Descargar la gráfica como imagen PNG"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-download"/></svg></button>
+                                <button type="button" class="btn btn-ghost btn-tabla" data-tabla="t-<%= id %>" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-table"/></svg><span class="lbl">Ver tabla</span></button>
+                            </div>
+<%  }
+%>
+                <div class="graficas">
+<% tarjetasGraf.forEach(function (t) { %>
+                    <section class="sg-card grafica<%= t.ancha ? ' ancha' : '' %>" aria-labelledby="tt-<%= t.id %>">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tt-<%= t.id %>"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-<%= t.icono %>"/></svg><span><%= t.titulo %><span class="sub"><%= t.sub %></span></span></h2>
+<%     acciones(t.id, ['evolucion', 'periodos', 'flujo', 'areas'].indexOf(t.id) >= 0); %>
+                        </div>
+                        <div class="sg-card__body">
+<%     if (t.resumen) { %>                            <p class="resumen-graf" id="resumenMensual"></p>
+<%     } %>
+<%     if (t.nota) { %>                            <p class="nota-graf" id="nota-<%= t.id %>" hidden></p>
+<%     } %>
+                            <div class="viz" id="g-<%= t.id %>"><span class="skel viz-skel" aria-hidden="true"></span></div>
+                            <div class="viz-tabla" id="t-<%= t.id %>" hidden></div>
+                        </div>
+                    </section>
+<% }); %>
+
+                    <section class="sg-card grafica ancha" aria-labelledby="tt-riesgo">
+                        <div class="sg-card__head">
+                            <h2 class="sg-card__title" id="tt-riesgo"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-shield"/></svg><span>Clasificación por nivel de riesgo<span class="sub">Reportes evaluados en la matriz de probabilidad × severidad. Toca un nivel para filtrar.</span></span></h2>
+<% acciones('riesgo', false); %>
+                        </div>
+                        <div class="sg-card__body">
+                            <div class="viz" id="g-riesgo"><span class="skel viz-skel" aria-hidden="true"></span></div>
+                            <div class="viz niveles-riesgo" id="g-niveles"></div>
+                            <div class="viz-tabla" id="t-riesgo" hidden></div>
+                            <div class="sg-banner warn aviso-riesgo" id="avisoMatriz" hidden>
+                                <svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-warn"/></svg>
+                                <span>La matriz de riesgo tiene los criterios del Manual SMS (numeral 5.3), pero aún no se confirma en el sistema.</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Comparación entre periodos -->
+                <div class="seccion-t">
+                    <div>
+                        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-trend"/></svg>Comparación entre periodos</h2>
+                        <p id="compNota">Compara el periodo seleccionado con el anterior de igual duración o con el mismo periodo del año anterior.</p>
+                    </div>
+                    <div class="periodo-sel">
+                        <span id="lblModo">Comparar con</span>
+                        <div class="segm" role="group" aria-labelledby="lblModo">
+                            <button type="button" data-modo="anterior" aria-pressed="true">Periodo anterior</button>
+                            <button type="button" data-modo="anio" aria-pressed="false">Año anterior</button>
+                        </div>
+                    </div>
+                </div>
+                <section class="sg-card" aria-label="Comparación entre periodos"><div class="sg-card__body" id="comparativo"><span class="skel"></span><span class="skel skel--media"></span></div></section>
+
+                <!-- SPI -->
+                <div class="seccion-t">
+                    <div>
+                        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-gauge"/></svg>Indicadores de desempeño de seguridad (SPI)</h2>
+                        <p id="spiNota">Valores mensuales calculados con los registros; la meta y el nivel de alerta de cada indicador los configura la Gerencia de SMS.</p>
+                    </div>
+                    <a class="btn btn-ghost btn-sm" href="/admin/spi" id="enlaceSpi"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-settings"/></svg>Configuración de SPI</a>
+                </div>
+                <div id="spi"><span class="skel"></span></div>
+
+                <!-- Desempeño por área -->
+                <div class="seccion-t">
+                    <div>
+                        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-building"/></svg>Desempeño por área responsable</h2>
+                        <p>Reportes donde el área está marcada como responsable. Toca un área para ver sus reportes.</p>
+                    </div>
+                </div>
+                <section class="sg-card" aria-label="Desempeño por área responsable"><div class="sg-card__body" id="desempeno"><span class="skel"></span><span class="skel"></span><span class="skel skel--media"></span></div></section>
+
+                <!-- Recurrencias -->
+                <div class="seccion-t">
+                    <div>
+                        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-repeat"/></svg>Hallazgos recurrentes</h2>
+                        <p id="recNota">Categorías y lugares que se repiten.</p>
+                    </div>
+                </div>
+                <div class="recurrencias">
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h3 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-tag"/></svg>Por categoría</h3></div>
+                        <div class="sg-card__body" id="recCategorias"><span class="skel"></span></div>
+                    </section>
+                    <section class="sg-card">
+                        <div class="sg-card__head"><h3 class="sg-card__title"><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-pin"/></svg><span id="recLugarT">Por lugar reportado</span></h3></div>
+                        <div class="sg-card__body" id="recLugares"><span class="skel"></span></div>
+                    </section>
+                </div>
+                <div class="viz-leyenda" style="margin-top:10px"><span><i style="--c:var(--s1)"></i>Cerrados</span><span><i style="--c:var(--s2)"></i>Abiertos</span></div>
+
+                <!-- Calidad de datos -->
+                <div class="seccion-t">
+                    <div>
+                        <h2><svg class="ic" aria-hidden="true"><use href="/img/icons.svg#i-checklist"/></svg>Consistencia de los datos</h2>
+                        <p>Verificación de que las cifras cuadran y de registros que conviene revisar. Considera todos los reportes, sin filtros.</p>
+                    </div>
+                </div>
+                <section class="sg-card" aria-label="Consistencia de los datos"><div class="sg-card__body" id="calidad"><span class="skel"></span></div></section>
+            </div>
+        </div>
+    </main>
+
+<%- include('partials/footer') %>
+
+    <script>
+    (function () {
+        'use strict';
+        var $ = function (id) { return document.getElementById(id); };
+        var G = SMSGraficas, SS = SMSSeries;
+        var CAMPOS = ['folio', 'q', 'fecha', 'desde', 'hasta', 'area', 'responsable', 'categoria', 'tipo', 'estado', 'riesgo', 'vencimiento'];
+        var PRESETS = ['hoy', 'ayer', '7', '30', 'mes', 'mes_anterior', '90', 'anio'];
+        var GRANS = ['auto', 'dia', 'semana', 'mes'];
+        var filtros = {};
+        var gran = 'auto';
+        var controlador = null;
+        var modoComp = 'anterior';
+        var ultimo = null;            // última respuesta de /api/sms/analisis (para reagrupar sin pedirla otra vez)
+        var catalogo = { areas: {}, niveles: {}, tipos: { sin_clasificar: 'Sin clasificar' } };
+        var A = SMSAnalisis;
+        // Mismos 4 grupos de estatus que las tarjetas de la vista general (colores validados)
+        var GRUPOS = [
+            { clave: 'A', campo: 'nuevos', nombre: 'Nuevos', color: 'var(--g-nuevo)' },
+            { clave: 'atencion', campo: 'atencion', nombre: 'En atención', color: 'var(--g-atencion)' },
+            { clave: 'D', campo: 'resueltos', nombre: 'Resueltos', color: 'var(--g-resuelto)' },
+            { clave: 'sin_accion', campo: 'sin_accion', nombre: 'Cerrados sin acción', color: 'var(--g-sinaccion)' }
+        ];
+        var ETIQUETAS_FILTRO = { folio: 'Folio', q: 'Palabras', fecha: 'Fecha', responsable: 'Responsable', tipo: 'Tipo de reporte', estado: 'Estatus', riesgo: 'Riesgo', vencimiento: 'Plazo' };
+        var VALORES_ESTADO = { A: 'A · Generado', B: 'B · Enterado', C: 'C · En atención', D: 'D · Resuelto', E: 'E · Duplicado', F: 'F · No requiere atención', abiertos: 'Abiertos', cerrados: 'Cerrados', atencion: 'En atención (B y C)', sin_accion: 'Cerrados sin acción (E y F)' };
+        var VALORES_RIESGO = { altos: 'Alto riesgo', sin_evaluar: 'Sin evaluar', pendiente_evaluar: 'Pendientes de evaluar' };
+        var VALORES_PLAZO = { vencidos: 'Vencidos', proximos: 'Próximos a vencer', en_tiempo: 'En tiempo', con_fecha: 'Con plazo', sin_fecha: 'Sin plazo', cerrado_en_plazo: 'Cerrados en plazo', cerrado_fuera: 'Cerrados fuera de plazo' };
+
+        function leerURL() {
+            var p = new URLSearchParams(location.search);
+            CAMPOS.forEach(function (c) { var v = p.get(c); if (v) filtros[c] = v; });
+            if (GRANS.indexOf(p.get('agrupar')) > 0) gran = p.get('agrupar');
+        }
+        function qs() {
+            var p = new URLSearchParams();
+            CAMPOS.forEach(function (c) { if (filtros[c]) p.set(c, filtros[c]); });
+            return p;
+        }
+        function rango(p) {
+            if (p === 'todo') return { desde: '', hasta: '' };
+            return SMS.rangoPeriodo(p);
+        }
+        function pintarForm() {
+            $('f_desde').value = filtros.fecha || filtros.desde || '';
+            $('f_hasta').value = filtros.fecha || filtros.hasta || '';
+            $('f_area').value = filtros.area || '';
+            $('f_categoria').value = filtros.categoria || '';
+            var actual = filtros.fecha || filtros.desde || filtros.hasta ? (filtros.fecha ? null : SMS.periodoActivo(filtros.desde, filtros.hasta, PRESETS)) : 'todo';
+            document.querySelectorAll('.preset').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.preset === actual ? 'true' : 'false'); });
+            document.querySelectorAll('[data-gran]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.gran === gran ? 'true' : 'false'); });
+            var q = qs();
+            var qFiltros = q.toString();
+            if (gran !== 'auto') q.set('agrupar', gran);
+            var qUrl = q.toString();
+            history.replaceState(null, '', location.pathname + (qUrl ? '?' + qUrl : ''));
+            $('enlaceReportes').href = '/reportes/general' + (qFiltros ? '?' + qFiltros : '');
+        }
+
+        async function catalogos() {
+            try {
+                var d = await SMS.api('/api/sms/catalogos');
+                $('f_area').innerHTML = '<option value="">Todas</option>' + d.departamentos.map(function (x) {
+                    return '<option value="' + x.id + '">' + SMS.esc(x.nombre) + (x.activo ? '' : ' (inactiva)') + '</option>';
+                }).join('');
+                $('f_categoria').innerHTML = '<option value="">Todas</option>' + d.categorias.map(function (c) { return '<option>' + SMS.esc(c) + '</option>'; }).join('');
+                d.departamentos.forEach(function (x) { catalogo.areas[x.id] = x.nombre; });
+                d.niveles.forEach(function (n) { catalogo.niveles[n.clave] = n.nombre; });
+                (d.tipos_reporte || []).forEach(function (t) { catalogo.tipos[t.clave] = t.nombre; });
+            } catch (e) { /* los filtros quedan con "Todas" */ }
+        }
+
+        function kpi(id, html, det) {
+            var n = $(id);
+            if (html === null) { n.textContent = 'Sin datos'; n.classList.add('nd'); } else { n.innerHTML = html; n.classList.remove('nd'); }
+            $(id + '-d').textContent = det || '';
+        }
+
+        // ------------------------------------------------ periodos y etiquetas
+        var fmtCorta = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+        var fmtDiaSem = new Intl.DateTimeFormat('es-MX', { weekday: 'short', timeZone: 'UTC' });
+        var fmtMesLargo = new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        function aUTC(iso) { return new Date(iso + 'T12:00:00Z'); }
+        function sinPunto(t) { return t.replace(/\./g, ''); }
+        function etiquetaEje(c, g) {
+            return g === 'mes' ? SMS.mes(c.clave) : sinPunto(fmtCorta.format(aUTC(c.desde)));
+        }
+        function tituloCubeta(c, g) {
+            if (g === 'dia') return sinPunto(fmtDiaSem.format(aUTC(c.desde))) + ' ' + SMS.fecha(c.desde);
+            if (g === 'semana') return 'Semana del ' + SMS.fecha(c.desde) + ' al ' + SMS.fecha(c.hasta) + (c.parcial ? ' (parcial)' : '');
+            var m = fmtMesLargo.format(aUTC(c.clave + '-15'));
+            return m.charAt(0).toUpperCase() + m.slice(1) + (c.parcial ? ' (del ' + SMS.fecha(c.desde) + ' al ' + SMS.fecha(c.hasta) + ')' : '');
+        }
+        var NOMBRE_GRAN = { dia: 'día', semana: 'semana', mes: 'mes' };
+        function rangoTexto(r) { return r ? (r.desde === r.hasta ? SMS.fecha(r.desde) : SMS.fecha(r.desde) + ' – ' + SMS.fecha(r.hasta)) : 'Todo el historial'; }
+        function nota(id, texto) { var n = $(id); if (!n) return; n.textContent = texto || ''; n.hidden = !texto; }
+
+        // Tocar un periodo de una gráfica lo aplica como filtro de fechas
+        function filtrarPeriodo(c) {
+            filtros.desde = c.desde; filtros.hasta = c.hasta;
+            delete filtros.fecha;
+            SAGA.toast('Periodo: ' + rangoTexto(c), 'info', { duracion: 2500 });
+            cargar();
+        }
+        // Tocar un elemento ya filtrado quita el filtro (alternar)
+        function alternarFiltro(campo, valor) {
+            if (String(filtros[campo]) === String(valor)) delete filtros[campo];
+            else filtros[campo] = String(valor);
+            cargar();
+        }
+
+        // Cada gráfica se dibuja por separado: si una falla, las demás se muestran igual
+        function seguro(ids, fn) {
+            try { fn(); }
+            catch (e) {
+                if (window.console) console.error('No se pudo dibujar ' + ids.join(', '), e);
+                ids.forEach(function (id) { G.vacio($(id), 'No se pudo dibujar la gráfica', e.message, 'crit'); });
+            }
+        }
+        // Un servidor sin reiniciar tras la actualización todavía no envía las series nuevas
+        var SIN_SERIES = 'El servidor aún no envía las series por fecha y por hora. Reinicia el servidor del SMS para cargar la versión actual.';
+        function faltanSeries(a, campos) { return campos.some(function (k) { return !Array.isArray(a[k]); }); }
+
+        // Gráficas por fecha: se reagrupan en el navegador al cambiar "Agrupar por"
+        function pintarTiempo(d) {
+            var a = d.analisis, num = SMS.numero;
+            var hoy = SMS.diaLocal();
+            var vacioTxt = 'Amplía el periodo o quita filtros.';
+            if (faltanSeries(a, ['diario', 'cierres_diarios'])) {
+                ['g-evolucion', 'g-periodos', 'g-flujo'].forEach(function (id) { G.vacio($(id), 'Gráfica no disponible', SIN_SERIES, 'warn'); });
+                ['t-evolucion', 't-periodos', 't-flujo'].forEach(function (id) { $(id).innerHTML = ''; });
+                $('resumenMensual').innerHTML = '';
+                nota('nota-evolucion', ''); nota('nota-flujo', '');
+                return;
+            }
+            var base = SS.rangoEfectivo(filtros, a.diario, hoy);
+            if (!base) {
+                ['g-evolucion', 'g-periodos', 'g-flujo'].forEach(function (id) { G.vacio($(id), 'Sin reportes en este periodo', vacioTxt, 'chart-line'); });
+                ['t-evolucion', 't-periodos', 't-flujo'].forEach(function (id) { $(id).innerHTML = ''; });
+                $('resumenMensual').innerHTML = '';
+                nota('nota-evolucion', ''); nota('nota-flujo', '');
+                return;
+            }
+            // Sin fin de periodo elegido, se incluyen los cierres posteriores (hasta hoy)
+            var r = filtros.hasta || filtros.fecha ? base : SS.rangoFlujo(base, a.cierres_diarios, hoy);
+            var p = SS.periodos(r.desde, r.hasta, gran === 'auto' ? SS.granularidad(r.desde, r.hasta) : gran);
+            var g = p.gran;
+            var cub = SS.agrupar(a.diario, a.cierres_diarios, p.cubetas);
+            var claves = cub.map(function (c) { return c.clave; });
+            var porClave = {};
+            cub.forEach(function (c) { porClave[c.clave] = c; });
+            var eje = function (clave) { return etiquetaEje(porClave[clave], g); };
+            var titulos = cub.map(function (c) { return tituloCubeta(c, g); });
+            var sinFecha = a.cerrados_sin_fecha > 0 ? ' ' + num(a.cerrados_sin_fecha) + ' reporte(s) cerrados sin registro de cierre no tienen fecha y no aparecen como cerrados.' : '';
+            var aviso = gran === 'dia' && g !== 'dia' ? ' El periodo es demasiado largo para verlo por día: se agrupa por semana.' : '';
+            var pistaFiltro = 'Clic para filtrar este periodo';
+
+            nota('nota-evolucion', 'Agrupado por ' + NOMBRE_GRAN[g] + ' · ' + rangoTexto(r) + '.' + aviso + sinFecha);
+            seguro(['g-evolucion'], function () { G.lineas($('g-evolucion'), {
+                etiquetas: claves, formatoX: eje, titulos: titulos, tituloX: 'Periodo',
+                descripcion: 'Reportes recibidos y cerrados por ' + NOMBRE_GRAN[g],
+                series: [
+                    { nombre: 'Recibidos', color: 'var(--g-recibidos)', valores: cub.map(function (c) { return c.recibidos; }) },
+                    { nombre: 'Cerrados', color: 'var(--g-cerrados)', valores: cub.map(function (c) { return c.cerrados; }) }
+                ],
+                interactiva: true, zoom: true,
+                alElegir: function (i) { filtrarPeriodo(cub[i]); },
+                pista: pistaFiltro + ' · arrastra para acercar',
+                tabla: $('t-evolucion'),
+                vacioTitulo: 'Sin reportes en este periodo', vacioTexto: vacioTxt
+            }); });
+
+            var pct = function (x, y) { return y ? Math.round((x / y) * 100) : 0; };
+            var totRec = cub.reduce(function (s, c) { return s + c.recibidos; }, 0);
+            var totCer = cub.reduce(function (s, c) { return s + c.resueltos + c.sin_accion; }, 0);
+            var pico = cub.reduce(function (m, c) { return c.recibidos > m.recibidos ? c : m; }, { recibidos: -1 });
+            $('resumenMensual').innerHTML = totRec
+                ? 'Se recibieron <b>' + num(totRec) + ' reportes</b>; <b>' + num(totCer) + ' ya están cerrados</b> (' + pct(totCer, totRec) + ' %) y <b>' + num(totRec - totCer) + ' siguen abiertos</b>.' +
+                  (cub.length > 1 ? ' El ' + NOMBRE_GRAN[g] + ' con más reportes: ' + SMS.esc(titulos[cub.indexOf(pico)]) + ' (' + num(pico.recibidos) + ').' : '')
+                : '';
+            seguro(['g-periodos'], function () { G.columnas($('g-periodos'), {
+                etiquetas: claves, formatoX: eje, titulos: titulos,
+                descripcion: 'Reportes recibidos por ' + NOMBRE_GRAN[g] + ', divididos por su estatus vigente',
+                series: GRUPOS.map(function (x) { return { nombre: x.nombre, color: x.color, valores: cub.map(function (c) { return c[x.campo]; }) }; }),
+                interactiva: true,
+                alElegir: function (i) { filtrarPeriodo(cub[i]); },
+                pista: pistaFiltro,
+                detalleCorto: g === 'mes' ? function (i) { var c = cub[i]; return c.recibidos ? pct(c.resueltos + c.sin_accion, c.recibidos) + ' % cerrado' : ''; } : null,
+                extraTooltip: function (i) { var c = cub[i]; return c.recibidos ? [{ nombre: 'cerrado (del total)', valor: pct(c.resueltos + c.sin_accion, c.recibidos) + ' %', color: 'transparent' }] : []; },
+                tabla: $('t-periodos'),
+                encabezadosTabla: ['Periodo', 'Recibidos', 'Nuevos', 'En atención', 'Resueltos', 'Sin acción', '% cerrado'],
+                filasTabla: cub.map(function (c, i) { return [titulos[i], num(c.recibidos), num(c.nuevos), num(c.atencion), num(c.resueltos), num(c.sin_accion), pct(c.resueltos + c.sin_accion, c.recibidos) + ' %']; }),
+                vacioTitulo: 'Sin reportes en este periodo', vacioTexto: vacioTxt
+            }); });
+
+            // Flujo acumulado: los reportes del periodo, seguidos hasta su último cierre
+            seguro(['g-flujo'], function () {
+            var rf = SS.rangoFlujo(base, a.cierres_diarios, hoy);
+            var pf = SS.periodos(rf.desde, rf.hasta, gran === 'auto' ? SS.granularidad(rf.desde, rf.hasta) : gran);
+            var ac = SS.acumulado(a.diario, a.cierres_diarios, pf.cubetas);
+            var ultimoAc = ac[ac.length - 1];
+            nota('nota-flujo', ac.length
+                ? 'Al ' + SMS.fecha(ultimoAc.hasta) + ': ' + num(ultimoAc.recibidos) + ' recibidos, ' + num(ultimoAc.cerrados) + ' cerrados y ' + num(ultimoAc.pendientes) + ' pendientes. Cierre vigente de cada reporte.' + sinFecha
+                : '');
+            var porClaveF = {};
+            pf.cubetas.forEach(function (c) { porClaveF[c.clave] = c; });
+            G.lineas($('g-flujo'), {
+                etiquetas: ac.map(function (c) { return c.clave; }),
+                formatoX: function (clave) { return etiquetaEje(porClaveF[clave], pf.gran); },
+                titulos: ac.map(function (c) { return 'Al cierre del ' + SMS.fecha(c.hasta); }),
+                tituloX: 'Al cierre de',
+                descripcion: 'Reportes recibidos y cerrados acumulados',
+                series: [
+                    { nombre: 'Recibidos acumulados', color: 'var(--g-recibidos)', valores: ac.map(function (c) { return c.recibidos; }) },
+                    { nombre: 'Cerrados acumulados', color: 'var(--g-cerrados)', valores: ac.map(function (c) { return c.cerrados; }) }
+                ],
+                areas: true, interactiva: true, zoom: true,
+                extraTooltip: function (i, ocultas) {
+                    return ocultas && ocultas.size ? [] : [{ nombre: 'pendientes (abiertos)', valor: num(ac[i].pendientes), color: 'transparent', separador: true }];
+                },
+                pista: 'Arrastra para acercar',
+                tabla: $('t-flujo'),
+                vacioTitulo: 'Sin reportes en este periodo', vacioTexto: vacioTxt
+            });
+            });
+        }
+
+        function pintar(d) {
+            ultimo = d;
+            var a = d.analisis, i = d.indicadores, num = SMS.numero;
+            kpi('k-total', num(i.total), i.abiertos + ' abiertos · ' + i.cerrados + ' cerrados');
+            kpi('k-cerrados', i.porcentaje_cerrados == null ? null : num(i.porcentaje_cerrados, 1) + '<small>%</small>', i.total ? i.resueltos + ' resueltos · ' + i.duplicados + ' duplicados · ' + i.no_requiere + ' no requieren' : '');
+            kpi('k-tiempo', i.dias_mediana_resolucion == null ? null : SMS.duracionDias(i.dias_mediana_resolucion).replace(/ (min|h|días?)$/, '<small>$1</small>'),
+                i.resueltos_con_fecha ? 'Mediana · promedio ' + SMS.duracionDias(i.dias_promedio_resolucion) + ' · ' + i.resueltos_con_fecha + ' resuelto(s)' : 'Sin reportes resueltos');
+            kpi('k-alto', i.evaluados ? num(i.alto_riesgo) : null, i.evaluados ? 'De ' + i.evaluados + ' evaluado(s)' : 'Sin evaluaciones de riesgo');
+            kpi('k-vencidos', i.con_fecha ? num(i.vencidos) : null, i.con_fecha ? 'De ' + i.con_fecha + ' con fecha compromiso' : 'Sin fechas compromiso');
+
+            seguro(['g-evolucion', 'g-periodos', 'g-flujo'], function () { pintarTiempo(d); });
+
+            // Distribución por estatus: dona con los 4 grupos y su desglose
+            seguro(['g-estatus'], function () {
+            var est = {};
+            a.por_estatus.forEach(function (e) { est[e.estado] = e.n; });
+            G.dona($('g-estatus'), {
+                partes: [
+                    { clave: 'A', nombre: 'Nuevos', valor: est.A || 0, color: 'var(--g-nuevo)', detalle: 'A · Generado' },
+                    { clave: 'atencion', nombre: 'En atención', valor: (est.B || 0) + (est.C || 0), color: 'var(--g-atencion)', detalle: 'B · Enterado ' + num(est.B || 0) + ' · C · En atención ' + num(est.C || 0) },
+                    { clave: 'D', nombre: 'Resueltos', valor: est.D || 0, color: 'var(--g-resuelto)', detalle: 'D · Resuelto' },
+                    { clave: 'sin_accion', nombre: 'Cerrados sin acción', valor: (est.E || 0) + (est.F || 0), color: 'var(--g-sinaccion)', detalle: 'E · Duplicado ' + num(est.E || 0) + ' · F · No requiere ' + num(est.F || 0) }
+                ],
+                seleccion: ['A', 'atencion', 'D', 'sin_accion'].indexOf(filtros.estado) >= 0 ? filtros.estado : null,
+                alElegir: function (p) { alternarFiltro('estado', p.clave); },
+                tabla: $('t-estatus'), vacioTitulo: 'Sin reportes con estos filtros', vacioTexto: 'Quita algún filtro para ver la distribución.'
+            });
+            });
+
+            // Concentración por hora del día
+            seguro(['g-horas'], function () {
+            if (faltanSeries(a, ['por_hora'])) { G.vacio($('g-horas'), 'Gráfica no disponible', SIN_SERIES, 'warn'); $('t-horas').innerHTML = ''; nota('nota-horas', ''); return; }
+            var totalH = a.por_hora.reduce(function (s, h) { return s + h.n; }, 0);
+            var picoH = a.por_hora.reduce(function (m, h) { return h.n > m.n ? h : m; }, { n: -1 });
+            var hh = function (h) { return (h < 10 ? '0' : '') + h; };
+            nota('nota-horas', totalH ? 'Hora con más reportes: ' + hh(picoH.hora) + ':00–' + hh(picoH.hora) + ':59 (' + num(picoH.n) + ', ' + Math.round((picoH.n / totalH) * 100) + ' % del total).' : '');
+            G.columnas($('g-horas'), {
+                etiquetas: a.por_hora.map(function (h) { return h.hora; }),
+                formatoX: function (h) { return hh(h) + ' h'; },
+                titulos: a.por_hora.map(function (h) { return hh(h.hora) + ':00 – ' + hh(h.hora) + ':59'; }),
+                descripcion: 'Reportes por hora del día en que se registraron',
+                series: [{ nombre: 'Reportes', color: 'var(--s1)', valores: a.por_hora.map(function (h) { return h.n; }) }],
+                extraTooltip: function (k) { return totalH ? [{ nombre: 'del total', valor: Math.round((a.por_hora[k].n / totalH) * 1000) / 10 + ' %', color: 'transparent' }] : []; },
+                alto: 240,
+                tabla: $('t-horas'),
+                encabezadosTabla: ['Hora', 'Reportes', '% del total'],
+                filasTabla: a.por_hora.map(function (h) { return [hh(h.hora) + ':00–' + hh(h.hora) + ':59', num(h.n), (totalH ? Math.round((h.n / totalH) * 1000) / 10 : 0) + ' %']; }),
+                vacioTitulo: 'Sin reportes con estos filtros', vacioTexto: 'Quita algún filtro para ver la concentración por hora.'
+            });
+            });
+
+            seguro(['g-tendencia'], function () {
+            var meses = a.mensual.map(function (m) { return m.mes; });
+            G.lineas($('g-tendencia'), {
+                etiquetas: meses, formatoX: SMS.mes, tituloX: 'Mes',
+                descripcion: 'Días promedio de resolución por mes',
+                formatoY: function (v) { return SMS.numero(v, 1) + ' d'; },
+                series: [{ nombre: 'Días promedio de resolución', color: 'var(--s1)', valores: a.mensual.map(function (m) { return m.dias_promedio_resolucion; }) }],
+                tabla: $('t-tendencia'),
+                vacioTitulo: 'Aún no hay reportes resueltos', vacioTexto: 'La tendencia aparecerá cuando se resuelvan reportes en este periodo.'
+            });
+            });
+            seguro(['g-areas'], function () { G.barras($('g-areas'), {
+                series: [{ nombre: 'Abiertos', color: 'var(--s2)' }, { nombre: 'Cerrados', color: 'var(--s1)' }],
+                filas: a.por_area.map(function (x) { return { clave: x.id, nombre: x.nombre + (x.activo ? '' : ' (inactiva)'), valores: [x.abiertos, x.cerrados] }; }),
+                interactiva: true,
+                seleccion: filtros.area || null,
+                alElegir: function (f) { alternarFiltro('area', f.clave); },
+                pista: 'Clic para ver solo esta área',
+                tituloCategoria: 'Área', tabla: $('t-areas'),
+                vacioTitulo: 'Sin áreas con reportes', vacioTexto: 'No hay reportes asignados con estos filtros.'
+            }); });
+            seguro(['g-categorias'], function () { G.barras($('g-categorias'), {
+                series: [{ nombre: 'Reportes', color: 'var(--s1)' }],
+                filas: a.categorias.map(function (c) { return { clave: c.categoria, nombre: c.categoria, valores: [c.n] }; }),
+                seleccion: filtros.categoria || null,
+                alElegir: function (f) { alternarFiltro('categoria', f.clave); },
+                pista: 'Clic para ver solo esta categoría',
+                tituloCategoria: 'Categoría', tabla: $('t-categorias'),
+                vacioTitulo: 'Sin categorías', vacioTexto: 'No hay reportes con estos filtros.'
+            }); });
+
+            // Tipo de reporte: voluntarios (prevenir) frente a obligatorios (eventos con afectación)
+            seguro(['g-tipos'], function () {
+            if (faltanSeries(a, ['por_tipo_reporte'])) { G.vacio($('g-tipos'), 'Gráfica no disponible', SIN_SERIES, 'warn'); $('t-tipos').innerHTML = ''; nota('nota-tipos', ''); return; }
+            var suma = function (g) { return a.por_tipo_reporte.filter(function (t) { return t.grupo === g; }).reduce(function (s, t) { return s + t.n; }, 0); };
+            var vol = suma('voluntario'), obl = suma('obligatorio');
+            var sinC = (a.por_tipo_reporte.find(function (t) { return t.clave === 'sin_clasificar'; }) || { n: 0 }).n;
+            nota('nota-tipos', vol + obl
+                ? 'Reportes voluntarios: ' + num(vol) + ' · obligatorios: ' + num(obl) +
+                  (obl ? '. Por cada reporte obligatorio hubo ' + num(vol / obl, 1) + ' voluntarios.' : '.') +
+                  (sinC ? ' ' + num(sinC) + ' reporte(s) anteriores a la clasificación quedan como “Sin clasificar”.' : '')
+                : (sinC ? 'Los ' + num(sinC) + ' reporte(s) de este periodo son anteriores a la clasificación por tipo.' : ''));
+            G.barras($('g-tipos'), {
+                series: [{ nombre: 'Abiertos', color: 'var(--s2)' }, { nombre: 'Cerrados', color: 'var(--s1)' }],
+                filas: a.por_tipo_reporte.filter(function (t) { return t.n > 0 || t.clave !== 'sin_clasificar'; })
+                    .map(function (t) { return { clave: t.clave, nombre: t.nombre, valores: [t.n - t.cerrados, t.cerrados] }; }),
+                interactiva: true,
+                seleccion: filtros.tipo || null,
+                alElegir: function (f) { alternarFiltro('tipo', f.clave); },
+                pista: 'Clic para ver solo este tipo',
+                tituloCategoria: 'Tipo de reporte', tabla: $('t-tipos'),
+                vacioTitulo: 'Sin reportes', vacioTexto: 'No hay reportes con estos filtros.'
+            });
+            });
+
+            seguro(['g-riesgo'], function () {
+            var evaluados = a.riesgo.celdas.reduce(function (s, c) { return s + c.n; }, 0);
+            $('avisoMatriz').hidden = d.matriz.validada;
+            if (!evaluados) {
+                G.vacio($('g-riesgo'), 'Aún no hay reportes con evaluación de riesgo',
+                    a.riesgo.sin_evaluar + ' reporte(s) sin evaluar. Supervisión puede evaluarlos desde el detalle de cada reporte.', 'shield');
+                $('g-niveles').innerHTML = '';
+                $('t-riesgo').innerHTML = '';
+            } else {
+                G.matriz($('g-riesgo'), { matriz: d.matriz, conteos: a.riesgo.celdas, tabla: $('t-riesgo') });
+                G.barras($('g-niveles'), {
+                    series: [{ nombre: 'Reportes', color: 'var(--s1)' }],
+                    filas: a.riesgo.niveles.map(function (n) { return { clave: n.clave, nombre: n.nombre, valores: [n.n] }; })
+                        .concat([{ clave: 'sin_evaluar', nombre: 'Sin evaluar', valores: [a.riesgo.sin_evaluar] }]),
+                    seleccion: filtros.riesgo || null,
+                    alElegir: function (f) { alternarFiltro('riesgo', f.clave); },
+                    pista: 'Clic para filtrar este nivel',
+                    tituloCategoria: 'Nivel'
+                });
+            }
+            });
+        }
+
+        // Filtros que no tienen control propio en esta barra (vienen de la vista general o de las gráficas)
+        function valorLegible(c, v) {
+            if (c === 'estado') return VALORES_ESTADO[v] || v;
+            if (c === 'riesgo') return VALORES_RIESGO[v] || catalogo.niveles[v] || v;
+            if (c === 'vencimiento') return VALORES_PLAZO[v] || v;
+            if (c === 'responsable') return catalogo.areas[v] || 'Área ' + v;
+            if (c === 'tipo') return catalogo.tipos[v] || v;
+            return v;
+        }
+        function pintarActivos() {
+            var extra = CAMPOS.filter(function (c) { return ['desde', 'hasta', 'area', 'categoria'].indexOf(c) < 0 && filtros[c]; });
+            var chips = $('chipsActivos');
+            chips.innerHTML = '';
+            extra.forEach(function (c) {
+                var s = document.createElement('span');
+                s.className = 'chip-filtro';
+                s.innerHTML = '<span><b></b> </span><button type="button">' + SMS.ic('x') + '</button>';
+                s.querySelector('b').textContent = (ETIQUETAS_FILTRO[c] || c) + ':';
+                s.querySelector('span').appendChild(document.createTextNode(' ' + valorLegible(c, filtros[c])));
+                s.querySelector('button').setAttribute('aria-label', 'Quitar filtro ' + (ETIQUETAS_FILTRO[c] || c));
+                s.querySelector('button').addEventListener('click', function () { delete filtros[c]; cargar(); });
+                chips.appendChild(s);
+            });
+            $('filtrosActivos').hidden = extra.length === 0;
+        }
+        /** Contexto que acompaña a cada PNG exportado */
+        function contextoTexto() {
+            var r = filtros.fecha ? { desde: filtros.fecha, hasta: filtros.fecha } : (filtros.desde || filtros.hasta) ? { desde: filtros.desde || '…', hasta: filtros.hasta || 'hoy' } : null;
+            var partes = ['Periodo: ' + (r ? (r.desde === r.hasta ? SMS.fecha(r.desde) : (r.desde === '…' ? '…' : SMS.fecha(r.desde)) + ' – ' + (r.hasta === 'hoy' ? 'hoy' : SMS.fecha(r.hasta))) : 'todo el historial')];
+            if (filtros.area) partes.push('Área: ' + (catalogo.areas[filtros.area] || filtros.area));
+            if (filtros.categoria) partes.push('Categoría: ' + filtros.categoria);
+            CAMPOS.forEach(function (c) {
+                if (['desde', 'hasta', 'fecha', 'area', 'categoria'].indexOf(c) < 0 && filtros[c]) partes.push((ETIQUETAS_FILTRO[c] || c) + ': ' + valorLegible(c, filtros[c]));
+            });
+            return 'S.A.G.A. · AIFA · Análisis estadístico de hallazgos SMS — ' + partes.join(' · ') + ' · Generado el ' + SMS.fechaHora(new Date());
+        }
+
+        function errorEn(id, e) {
+            $(id).innerHTML = '<div class="sg-empty crit">' + SMS.ic('crit') + '<b>No se pudo cargar esta sección</b>' + SMS.esc(e.message) + '</div>';
+        }
+        async function cargarComparativo(senal) {
+            try {
+                var q = qs(); q.set('modo', modoComp);
+                var c = await SMS.api('/api/sms/comparativo?' + q.toString(), { signal: senal });
+                A.comparativo($('comparativo'), c);
+                $('compNota').textContent = c.automatico
+                    ? 'Sin periodo seleccionado: se compara el último mes con reportes contra ' + (modoComp === 'anio' ? 'el mismo mes del año anterior' : 'el mes anterior') + '. Elige un periodo arriba para cambiarlo.'
+                    : 'Periodo seleccionado frente al ' + (modoComp === 'anio' ? 'mismo periodo del año anterior' : 'periodo anterior de igual duración') + '.';
+            } catch (e) { if (e.name !== 'AbortError') errorEn('comparativo', e); }
+        }
+        async function cargar() {
+            pintarForm();
+            pintarActivos();
+            if (controlador) controlador.abort();
+            controlador = new AbortController();
+            var senal = controlador.signal;
+            // Al recargar se conserva el dibujo anterior atenuado (sin parpadeo)
+            $('zona').classList.add('is-cargando');
+            $('zona').setAttribute('aria-busy', 'true');
+            var q = qs().toString();
+            var tareas = [
+                SMS.api('/api/sms/analisis?' + q, { signal: senal }).then(pintar).catch(function (e) {
+                    if (e.name === 'AbortError') throw e;
+                    // Sin datos que mostrar: cada gráfica sin dibujo previo explica el error
+                    document.querySelectorAll('.grafica .viz').forEach(function (v) {
+                        if (v.querySelector('.viz-skel')) G.vacio(v, 'No se pudo cargar la gráfica', e.message, 'crit');
+                    });
+                    throw e;
+                }),
+                cargarComparativo(senal),
+                SMS.api('/api/sms/spi?' + q, { signal: senal }).then(function (d) {
+                    A.spi($('spi'), d, { enlaceConfig: true });
+                    $('spiNota').textContent = 'Valores mensuales (' + (d.meses.length ? SMS.mes(d.meses[0]) + ' – ' + SMS.mes(d.meses[d.meses.length - 1]) : 'sin periodo') + ') calculados con los registros; la meta y el nivel de alerta los configura la Gerencia de SMS.';
+                }).catch(function (e) { if (e.name !== 'AbortError') errorEn('spi', e); }),
+                SMS.api('/api/sms/desempeno-areas?' + q, { signal: senal }).then(function (d) { A.desempeno($('desempeno'), d, { enlaces: true }); })
+                    .catch(function (e) { if (e.name !== 'AbortError') errorEn('desempeno', e); }),
+                SMS.api('/api/sms/recurrencias?' + q, { signal: senal }).then(function (d) {
+                    A.recurrencias($('recCategorias'), $('recLugares'), d, { enlaces: true });
+                    $('recLugarT').textContent = d.zonas && d.zonas.grupos.length ? 'Por zona del aeropuerto' : 'Por lugar reportado';
+                    $('recNota').textContent = 'Recurrente = ' + d.umbral + ' o más reportes en ' + d.ventana_dias + ' días (del ' + SMS.fecha(d.ventana.desde) + ' al ' + SMS.fecha(d.ventana.hasta) + '). ' +
+                        (d.zonas && d.zonas.grupos.length ? '' : 'Los lugares se agrupan automáticamente a partir del texto capturado (por ejemplo, “cerca de la posición 505” y “Posición 505”).');
+                }).catch(function (e) { if (e.name !== 'AbortError') { errorEn('recCategorias', e); $('recLugares').innerHTML = ''; } })
+            ];
+            try {
+                await Promise.all(tareas);
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                SAGA.toast('No se pudo cargar el análisis: ' + e.message, 'error');
+            } finally {
+                if (!senal.aborted) { $('zona').classList.remove('is-cargando'); $('zona').setAttribute('aria-busy', 'false'); }
+            }
+        }
+        async function cargarCalidad() {
+            try { A.calidad($('calidad'), await SMS.api('/api/sms/calidad-datos')); }
+            catch (e) { errorEn('calidad', e); }
+        }
+        document.querySelectorAll('[data-modo]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                modoComp = b.dataset.modo;
+                document.querySelectorAll('[data-modo]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+                cargarComparativo();
+            });
+        });
+
+        document.querySelectorAll('.preset').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var r = rango(b.dataset.preset);
+                if (r.desde) { filtros.desde = r.desde; filtros.hasta = r.hasta; } else { delete filtros.desde; delete filtros.hasta; }
+                delete filtros.fecha;
+                cargar();
+            });
+        });
+        // Cambiar la agrupación solo reagrupa lo ya cargado (sin pedir datos de nuevo)
+        document.querySelectorAll('[data-gran]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (gran === b.dataset.gran) return;
+                gran = b.dataset.gran;
+                pintarForm();
+                if (ultimo) seguro(['g-evolucion', 'g-periodos', 'g-flujo'], function () { pintarTiempo(ultimo); });
+            });
+        });
+        $('formFiltros').addEventListener('change', function (e) {
+            if (!e.target.id || e.target.id.indexOf('f_') !== 0) return;
+            ['desde', 'hasta', 'area', 'categoria'].forEach(function (c) { var v = $('f_' + c).value; if (v) filtros[c] = v; else delete filtros[c]; });
+            delete filtros.fecha;
+            cargar();
+        });
+        $('btnRestablecer').addEventListener('click', function () {
+            filtros = {};
+            document.querySelectorAll('.grafica .viz').forEach(function (v) { if (v._vista) G.restablecer(v); });
+            cargar();
+        });
+
+        // Acciones de cada tarjeta: restablecer vista y exportar PNG
+        document.addEventListener('viz:vista', function (e) {
+            var tarjeta = e.target.closest('.grafica');
+            var b = tarjeta && tarjeta.querySelector('[data-restablecer-viz]');
+            if (b) b.hidden = !e.detail.alterada;
+        });
+        document.addEventListener('click', function (e) {
+            var r = e.target.closest('[data-restablecer-viz]');
+            if (r) { G.restablecer($(r.getAttribute('data-restablecer-viz'))); return; }
+            var png = e.target.closest('[data-png]');
+            if (!png) return;
+            var tarjeta = png.closest('.grafica');
+            var titulo = (tarjeta.querySelector('.sg-card__title > span').firstChild.textContent || 'grafica').trim();
+            var nombre = 'sms-' + titulo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + SMS.diaLocal() + '.png';
+            png.disabled = true;
+            G.exportarPNG(tarjeta, { nombre: nombre, pie: contextoTexto() })
+                .then(function () { SAGA.toast('Imagen descargada: ' + nombre, 'success', { duracion: 3000 }); })
+                .catch(function (err) { SAGA.toast('No se pudo exportar la imagen: ' + err.message, 'error'); })
+                .finally(function () { png.disabled = false; });
+        });
+
+        $('expPdf').addEventListener('click', function () {
+            SMS.cerrarMenus();
+            var q = qs(); q.set('imprimir', '1');
+            window.open('/reportes/ejecutivo?' + q.toString(), '_blank', 'noopener');
+        });
+        $('expExcel').addEventListener('click', async function () {
+            SMS.cerrarMenus();
+            try { await SMS.descargar('/api/sms/exportar.xlsx?' + qs().toString(), 'reportes-sms-aifa-' + SMS.diaLocal() + '.xlsx'); SAGA.toast('Archivo de Excel descargado', 'success'); }
+            catch (e) { SAGA.toast(e.message, 'error'); }
+        });
+
+        leerURL();
+        catalogos().then(cargar);
+        cargarCalidad();
+
+    })();
+    </script>
+</body>
+</html>
